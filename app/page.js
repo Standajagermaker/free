@@ -44,6 +44,21 @@ function normalizeCity(city) {
   return String(city || "").trim().toLowerCase();
 }
 
+function answersLabel(count) {
+  if (!count) return "0 answers";
+  if (count === 1) return "1 answer";
+  return `${count} answers`;
+}
+
+function timeLabel(ad) {
+  const from = ad.event_from || ad.time_from || "";
+  const to = ad.event_to || ad.time_to || "";
+  if (from && to) return `${from} - ${to}`;
+  if (from) return `from ${from}`;
+  if (to) return `until ${to}`;
+  return String(ad.created_at || "").slice(0, 10);
+}
+
 async function geocodeCity(city) {
   const key = normalizeCity(city);
   if (FALLBACK_CITY_COORDS[key]) return FALLBACK_CITY_COORDS[key];
@@ -64,19 +79,70 @@ export default function Page() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
+  const [counts, setCounts] = useState({});
+  const [visits, setVisits] = useState(null);
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
+  const authHeaders = {
+    apikey: anonKey,
+    Authorization: `Bearer ${anonKey}`,
+  };
+
   async function loadAds() {
     const res = await fetch(`${supabaseUrl}/rest/v1/ads?select=*&order=created_at.desc`, {
-      headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` },
+      headers: authHeaders,
     });
     const data = await res.json();
     setAds(Array.isArray(data) ? data : []);
   }
 
-  useEffect(() => { loadAds(); }, []);
+  async function loadCounts() {
+    try {
+      const res = await fetch(`${supabaseUrl}/rest/v1/responses?select=ad_id`, {
+        headers: authHeaders,
+      });
+      const data = await res.json();
+      const map = {};
+      (Array.isArray(data) ? data : []).forEach((row) => {
+        map[row.ad_id] = (map[row.ad_id] || 0) + 1;
+      });
+      setCounts(map);
+    } catch {
+      setCounts({});
+    }
+  }
+
+  async function trackVisit() {
+    try {
+      await fetch(`${supabaseUrl}/rest/v1/site_visits`, {
+        method: "POST",
+        headers: { ...authHeaders, "Content-Type": "application/json", Prefer: "return=minimal" },
+        body: JSON.stringify({ page: "home" }),
+      });
+      const res = await fetch(`${supabaseUrl}/rest/v1/site_visits?select=id`, {
+        headers: { ...authHeaders, Prefer: "count=exact" },
+      });
+      const range = res.headers.get("content-range") || "";
+      const count = range.includes("/") ? Number(range.split("/").pop()) : null;
+      if (Number.isFinite(count)) setVisits(count);
+    } catch {
+      const local = Number(localStorage.getItem("feelfree_visits") || "0") + 1;
+      localStorage.setItem("feelfree_visits", String(local));
+      setVisits(local);
+    }
+  }
+
+  async function refreshAll() {
+    await loadAds();
+    await loadCounts();
+  }
+
+  useEffect(() => {
+    refreshAll();
+    trackVisit();
+  }, []);
 
   async function uploadImage(file) {
     if (!file || file.size === 0) return "";
@@ -85,8 +151,7 @@ export default function Page() {
     const res = await fetch(`${supabaseUrl}/storage/v1/object/ads/${filePath}`, {
       method: "POST",
       headers: {
-        apikey: anonKey,
-        Authorization: `Bearer ${anonKey}`,
+        ...authHeaders,
         "Content-Type": file.type || "application/octet-stream",
         "x-upsert": "false",
       },
@@ -113,6 +178,8 @@ export default function Page() {
         city,
         lat: coords?.lat || null,
         lng: coords?.lng || null,
+        event_from: form.get("event_from") || null,
+        event_to: form.get("event_to") || null,
         password: form.get("password") || "",
         image_url: imageUrl,
       };
@@ -122,8 +189,7 @@ export default function Page() {
       const res = await fetch(`${supabaseUrl}/rest/v1/ads`, {
         method: "POST",
         headers: {
-          apikey: anonKey,
-          Authorization: `Bearer ${anonKey}`,
+          ...authHeaders,
           "Content-Type": "application/json",
           Prefer: "return=minimal",
         },
@@ -132,7 +198,7 @@ export default function Page() {
       if (!res.ok) throw new Error(await res.text());
       formEl.reset();
       setStatus("Ad created.");
-      await loadAds();
+      await refreshAll();
     } catch (error) {
       setStatus(`Error: ${error.message}`);
     } finally {
@@ -148,16 +214,20 @@ export default function Page() {
 
   return (
     <main style={{ padding: 20, fontFamily: "Arial", background: "#f5f5f0", minHeight: "100vh" }}>
-      <h1 style={{ marginTop: 0 }}>feelfree</h1>
-      <p style={{ color: "#555", marginTop: -8 }}>Anonymous classifieds. City-level location only.</p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 16 }}>
+        <div>
+          <h1 style={{ margin: 0 }}>feelfree</h1>
+          <p style={{ color: "#555", marginTop: 4 }}>Anonymous classifieds. City-level location only.</p>
+        </div>
+        <div style={{ ...cardStyle, padding: "8px 12px", textAlign: "right", minWidth: 110 }}>
+          <div style={{ color: "#777", fontSize: 12 }}>visits</div>
+          <strong>{visits === null ? "-" : visits}</strong>
+        </div>
+      </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 0.85fr) minmax(420px, 2.15fr)", gap: 16, alignItems: "start" }}>
         <aside style={{ display: "grid", gap: 12 }}>
           <section style={cardStyle}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <strong>City map</strong>
-              <span style={{ fontSize: 12, color: "#777" }}>approximate</span>
-            </div>
             <Map ads={filtered} />
           </section>
 
@@ -167,11 +237,14 @@ export default function Page() {
               <input name="title" placeholder="Title" required style={inputStyle} />
               <textarea name="description" placeholder="Description" required rows={4} style={inputStyle} />
               <input name="city" placeholder="City only" required style={inputStyle} />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <input name="event_from" type="datetime-local" title="From" style={inputStyle} />
+                <input name="event_to" type="datetime-local" title="To" style={inputStyle} />
+              </div>
               <input name="password" placeholder="Password to read replies" required style={inputStyle} />
               <input name="image" type="file" accept="image/*" style={inputStyle} />
               <button disabled={loading} style={buttonStyle}>{loading ? "Posting..." : "Post"}</button>
             </form>
-            <p style={{ fontSize: 12, color: "#777", lineHeight: 1.4 }}>Only city coordinates are saved. No exact address.</p>
             {status && <p style={{ fontSize: 13, color: status.startsWith("Error") ? "#b91c1c" : "#166534" }}>{status}</p>}
           </section>
         </aside>
@@ -179,33 +252,36 @@ export default function Page() {
         <section style={cardStyle}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 10 }}>
             <h2 style={{ margin: 0, fontSize: 20 }}>Browse ads</h2>
-            <button onClick={loadAds} style={{ ...buttonStyle, padding: "8px 10px", background: "#333" }}>Refresh</button>
+            <button onClick={refreshAll} style={{ ...buttonStyle, padding: "8px 10px", background: "#333" }}>Refresh</button>
           </div>
 
           <input placeholder="Search title, description or city..." value={query} onChange={e => setQuery(e.target.value)} style={{ ...inputStyle, marginBottom: 10 }} />
 
           <div style={{ display: "grid", gap: 8 }}>
-            {filtered.map(ad => (
-              <article key={ad.id} style={{ border: "1px solid #ddd", padding: 10, borderRadius: 10, fontSize: 14, background: "#fafafa" }}>
-                <div style={{ display: "grid", gridTemplateColumns: ad.image_url ? "96px 1fr" : "1fr", gap: 10 }}>
-                  {ad.image_url && <img src={ad.image_url} alt="Ad image" style={{ width: 96, height: 74, objectFit: "cover", borderRadius: 8 }} />}
-                  <div>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                      <b>{ad.title}</b>
-                      <span style={{ color: "#666", whiteSpace: "nowrap" }}>{ad.city}</span>
-                    </div>
-                    <div style={{ color: "#555", margin: "5px 0", lineHeight: 1.35 }}>{ad.description}</div>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
-                      <span style={{ color: "#888", fontSize: 12 }}>{String(ad.created_at || "").slice(0, 10)} · city-level only</span>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        <button style={{ padding: "6px 9px", borderRadius: 8, border: "1px solid #ccc", background: "white", cursor: "pointer" }}>Reply</button>
-                        <button style={{ padding: "6px 9px", borderRadius: 8, border: "1px solid #ccc", background: "white", cursor: "pointer" }}>Read</button>
+            {filtered.map(ad => {
+              const answerCount = counts[ad.id] || 0;
+              return (
+                <article key={ad.id} style={{ border: "1px solid #ddd", padding: 10, borderRadius: 10, fontSize: 14, background: "#fafafa" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: ad.image_url ? "96px 1fr" : "1fr", gap: 10 }}>
+                    {ad.image_url && <img src={ad.image_url} alt="Ad image" style={{ width: 96, height: 74, objectFit: "cover", borderRadius: 8 }} />}
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                        <b>{ad.title}</b>
+                        <span style={{ color: "#666", whiteSpace: "nowrap" }}>{ad.city}</span>
+                      </div>
+                      <div style={{ color: "#555", margin: "5px 0", lineHeight: 1.35 }}>{ad.description}</div>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
+                        <span style={{ color: "#888", fontSize: 12 }}>{timeLabel(ad)} · {answersLabel(answerCount)}</span>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button style={{ padding: "6px 9px", borderRadius: 8, border: "1px solid #ccc", background: "white", cursor: "pointer" }}>{answerCount ? "Reply" : "Reply now"}</button>
+                          <button style={{ padding: "6px 9px", borderRadius: 8, border: "1px solid #ccc", background: "white", cursor: "pointer" }}>Read</button>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
             {!filtered.length && <p style={{ color: "#777" }}>No ads found.</p>}
           </div>
         </section>
