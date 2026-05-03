@@ -8,7 +8,7 @@ const Map = dynamic(() => import("./Map"), { ssr: false });
 const inputStyle = { width: "100%", padding: 10, border: "1px solid #ddd", borderRadius: 10, boxSizing: "border-box" };
 const buttonStyle = { padding: "9px 12px", border: 0, borderRadius: 9, background: "#111", color: "white", cursor: "pointer", fontWeight: "bold" };
 const smallButton = { padding: "6px 9px", borderRadius: 8, border: "1px solid #ccc", background: "white", cursor: "pointer" };
-const cardStyle = { border: "1px solid #ddd", borderRadius: 14, padding: 12, background: "white" };
+const cardStyle = { border: "1px solid #ddd", borderRadius: 14, padding: 12, background: "white", boxSizing: "border-box", minWidth: 0 };
 
 const FALLBACK_CITY_COORDS = {
   prague: { lat: 50.0755, lng: 14.4378 },
@@ -190,18 +190,18 @@ export default function Page() {
   });
 
   return (
-    <main style={{ padding: 20, fontFamily: "Arial", background: "#f5f5f0", minHeight: "100vh" }}>
+    <main style={{ padding: 20, fontFamily: "Arial", background: "#f5f5f0", minHeight: "100vh", overflowX: "hidden" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 16 }}>
-        <div>
+        <div style={{ minWidth: 0 }}>
           <h1 style={{ margin: 0 }}>feel free 2</h1>
           <p style={{ color: "#555", marginTop: 4 }}>Anonymous. Free announce, free your mind, feel free to enjoy, offer, share, invite, organize ...</p>
         </div>
         <div style={{ ...cardStyle, padding: "8px 12px", textAlign: "right", minWidth: 110 }}><div style={{ color: "#777", fontSize: 12 }}>visits</div><strong>{visits === null ? "-" : visits}</strong></div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 0.85fr) minmax(420px, 2.15fr)", gap: 16, alignItems: "start", marginTop: 16 }}>
-        <aside style={{ display: "grid", gap: 12 }}>
-          <section style={cardStyle}><Map ads={filtered} /></section>
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(240px, 34%) minmax(0, 1fr)", gap: 16, alignItems: "start", marginTop: 16, width: "100%" }}>
+        <aside style={{ display: "grid", gap: 12, minWidth: 0, maxWidth: "100%" }}>
+          <section style={{ ...cardStyle, overflow: "hidden" }}><div style={{ width: "100%", maxWidth: "100%", overflow: "hidden" }}><Map ads={filtered} /></div></section>
           <section style={cardStyle}>
             <h2 style={{ margin: "0 0 10px", fontSize: 18 }}>Add ad</h2>
             <form onSubmit={createAd} style={{ display: "grid", gap: 8 }}>
@@ -238,21 +238,21 @@ export default function Page() {
           </section>
         </aside>
 
-        <section style={cardStyle}>
+        <section style={{ ...cardStyle, minWidth: 0, overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 10 }}><h2 style={{ margin: 0, fontSize: 20 }}>Browse ads</h2><button onClick={refreshAll} style={{ ...buttonStyle, padding: "8px 10px", background: "#333" }}>Refresh</button></div>
           <input placeholder="Search title, description or city..." value={query} onChange={e => setQuery(e.target.value)} style={{ ...inputStyle, marginBottom: 10 }} />
-          <div style={{ display: "grid", gap: 8 }}>
+          <div style={{ display: "grid", gap: 8, minWidth: 0 }}>
             {filtered.map(ad => {
               const answerCount = counts[ad.id] || 0;
               const publicMode = isPublicAd(ad);
               return (
-                <article key={ad.id} style={{ border: "1px solid #ddd", padding: 10, borderRadius: 10, fontSize: 14, background: "#fafafa" }}>
-                  <div style={{ display: "grid", gridTemplateColumns: ad.image_url ? "96px 1fr" : "1fr", gap: 10 }}>
-                    {ad.image_url && <img src={ad.image_url} alt="Ad image" style={{ width: 96, height: 74, objectFit: "cover", borderRadius: 8 }} />}
-                    <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}><b>{ad.title}</b><span style={{ color: "#666", whiteSpace: "nowrap" }}>{ad.city}</span></div>
-                      <div style={{ color: "#555", margin: "5px 0", lineHeight: 1.35 }}>{ad.description}</div>
-                      {publicMode && ad.public_contact && <div style={{ color: "#166534", margin: "5px 0", fontSize: 13 }}><b>Public contact:</b> {ad.public_contact}</div>}
+                <article key={ad.id} style={{ border: "1px solid #ddd", padding: 10, borderRadius: 10, fontSize: 14, background: "#fafafa", minWidth: 0, overflow: "hidden" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: ad.image_url ? "72px minmax(0, 1fr)" : "1fr", gap: 10, minWidth: 0 }}>
+                    {ad.image_url && <img src={ad.image_url} alt="Ad image" style={{ width: 72, height: 64, objectFit: "cover", borderRadius: 8 }} />}
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}><b style={{ overflowWrap: "anywhere" }}>{ad.title}</b><span style={{ color: "#666", whiteSpace: "nowrap" }}>{ad.city}</span></div>
+                      <div style={{ color: "#555", margin: "5px 0", lineHeight: 1.35, overflowWrap: "anywhere" }}>{ad.description}</div>
+                      {publicMode && ad.public_contact && <div style={{ color: "#166534", margin: "5px 0", fontSize: 13, overflowWrap: "anywhere" }}><b>Public contact:</b> {ad.public_contact}</div>}
                       <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
                         <span style={{ color: "#888", fontSize: 12 }}>{eventLabel(ad)} · {answersLabel(answerCount)} · {publicMode ? "public" : "secret"}</span>
                         <div style={{ display: "flex", gap: 6 }}>
