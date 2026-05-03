@@ -1,23 +1,32 @@
-const CITIES = ["Prague", "Berlin", "Vienna"];
-const SEARCH_TERMS = ["music", "party", "concert", "theatre", "film", "workshop", "festival"];
-
-function normalizeEvent(e, fallbackCity, fallbackCategory) {
-  const start = e.start?.local || "";
-  const city = e.venue?.address?.city || fallbackCity || "Online / Unknown";
+function normalizeEventbriteEvent(e) {
+  const start = e.start?.local || e.start?.utc || "";
   return {
     id: e.id,
-    title: e.name?.text || "Untitled event",
-    city,
+    title: e.name?.text || e.name?.html || "Untitled event",
+    city: e.venue?.address?.city || e.online_event ? "Online" : "Unknown",
     event_date: start.slice(0, 10),
     event_time: start.slice(11, 16),
-    category: fallbackCategory || "event",
+    category: "event",
     source: "Eventbrite",
     url: e.url || "",
   };
 }
 
-async function searchEventbrite(url, token) {
-  const res = await fetch(url, {
+function normalizeSupabaseEvent(e) {
+  return {
+    id: e.id,
+    title: e.title || "Untitled event",
+    city: e.city || "Unknown",
+    event_date: e.event_date || "",
+    event_time: e.event_time || "",
+    category: e.category || "event",
+    source: e.source || "Supabase",
+    url: e.url || "",
+  };
+}
+
+async function ebGet(path, token) {
+  const res = await fetch(`https://www.eventbriteapi.com/v3${path}`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
   });
@@ -30,55 +39,55 @@ async function searchEventbrite(url, token) {
     data = { raw: text };
   }
 
+  return { ok: res.ok, status: res.status, path, data };
+}
+
+async function fetchEventbriteOwnedEvents(token) {
+  const orgsResult = await ebGet("/users/me/organizations/", token);
+  const organizations = orgsResult.data?.organizations || [];
+  const eventResults = [];
+
+  for (const org of organizations) {
+    const orgId = org.id;
+    const eventsResult = await ebGet(`/organizations/${orgId}/events/?status=live&expand=venue`, token);
+    eventResults.push({ organization: org.name || orgId, organization_id: orgId, ...eventsResult });
+  }
+
+  const events = eventResults
+    .flatMap((result) => result.data?.events || [])
+    .map(normalizeEventbriteEvent);
+
+  return { orgsResult, organizations, eventResults, events };
+}
+
+async function fetchSupabaseEvents() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !anonKey) return { ok: false, status: 0, events: [], error: "Missing Supabase env" };
+
+  const res = await fetch(`${supabaseUrl}/rest/v1/events?select=*&order=event_date.asc`, {
+    headers: {
+      apikey: anonKey,
+      Authorization: `Bearer ${anonKey}`,
+    },
+    cache: "no-store",
+  });
+
+  const data = await res.json().catch(() => []);
   return {
     ok: res.ok,
     status: res.status,
-    url,
-    count: Array.isArray(data.events) ? data.events.length : 0,
-    events: data.events || [],
-    error: data.error || data.error_description || data.message || null,
-    sample: data.events?.[0]?.name?.text || null,
+    events: Array.isArray(data) ? data.map(normalizeSupabaseEvent) : [],
+    error: Array.isArray(data) ? null : data,
   };
 }
 
-async function fetchCityEvents(city, token) {
-  const results = [];
-
-  for (const term of SEARCH_TERMS) {
-    const url = `https://www.eventbriteapi.com/v3/events/search/?location.address=${encodeURIComponent(city)}&expand=venue&sort_by=date&q=${encodeURIComponent(term)}`;
-    const result = await searchEventbrite(url, token);
-    results.push({ city, term, ...result });
-  }
-
-  return results;
-}
-
-async function fetchGlobalEvents(token) {
-  const results = [];
-
-  for (const term of SEARCH_TERMS) {
-    const url = `https://www.eventbriteapi.com/v3/events/search/?expand=venue&sort_by=date&q=${encodeURIComponent(term)}`;
-    const result = await searchEventbrite(url, token);
-    results.push({ city: "global", term, ...result });
-  }
-
-  return results;
-}
-
-function flattenResults(results) {
-  const byId = new Map();
-
-  results.forEach((result) => {
-    (result.events || []).forEach((e) => {
-      const event = normalizeEvent(e, result.city === "global" ? null : result.city, result.term);
-      if (event.id && !byId.has(event.id)) byId.set(event.id, event);
-    });
-  });
-
-  return [...byId.values()]
+function sortEvents(events) {
+  return events
     .filter((event) => event.title)
     .sort((a, b) => `${a.event_date || ""} ${a.event_time || ""}`.localeCompare(`${b.event_date || ""} ${b.event_time || ""}`))
-    .slice(0, 80);
+    .slice(0, 120);
 }
 
 export async function GET(request) {
@@ -86,25 +95,36 @@ export async function GET(request) {
   const url = new URL(request.url);
   const debug = url.searchParams.get("debug") === "1";
 
-  if (!token) {
-    return Response.json({ error: "Missing EVENTBRITE_TOKEN" }, { status: 500 });
-  }
+  let eventbrite = null;
+  let supabase = null;
+  let events = [];
 
   try {
-    const cityResults = (await Promise.all(CITIES.map((city) => fetchCityEvents(city, token)))).flat();
-    let events = flattenResults(cityResults);
-    let globalResults = [];
+    if (token) {
+      eventbrite = await fetchEventbriteOwnedEvents(token);
+      events = sortEvents(eventbrite.events);
+    }
 
     if (!events.length) {
-      globalResults = await fetchGlobalEvents(token);
-      events = flattenResults(globalResults);
+      supabase = await fetchSupabaseEvents();
+      events = sortEvents(supabase.events);
     }
 
     if (debug) {
       return Response.json({
         token_present: Boolean(token),
-        city_results: cityResults.map(({ events, ...rest }) => rest),
-        global_results: globalResults.map(({ events, ...rest }) => rest),
+        eventbrite_orgs_status: eventbrite?.orgsResult?.status || null,
+        eventbrite_orgs_count: eventbrite?.organizations?.length || 0,
+        eventbrite_event_results: (eventbrite?.eventResults || []).map((result) => ({
+          organization: result.organization,
+          organization_id: result.organization_id,
+          status: result.status,
+          ok: result.ok,
+          count: result.data?.events?.length || 0,
+          error: result.data?.error || result.data?.error_description || null,
+        })),
+        supabase_status: supabase?.status || null,
+        supabase_count: supabase?.events?.length || 0,
         final_count: events.length,
         sample: events[0] || null,
       });
