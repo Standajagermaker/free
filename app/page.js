@@ -30,6 +30,14 @@ function eventLabel(ad) {
   if (time) return time;
   return String(ad.created_at || "").slice(0, 10);
 }
+function topCities(ads) {
+  const map = {};
+  ads.forEach((ad) => { const city = ad.city || "Unknown"; map[city] = (map[city] || 0) + 1; });
+  return Object.entries(map).sort((a, b) => b[1] - a[1]).slice(0, 5);
+}
+function topAds(ads, counts) {
+  return [...ads].sort((a, b) => (counts[b.id] || 0) - (counts[a.id] || 0)).slice(0, 5);
+}
 
 async function geocodeCity(city) {
   const key = normalizeCity(city);
@@ -159,6 +167,9 @@ export default function Page() {
     const haystack = `${ad.title || ""} ${ad.description || ""} ${ad.city || ""}`.toLowerCase();
     return haystack.includes(q);
   });
+  const totalAnswers = Object.values(counts).reduce((sum, value) => sum + value, 0);
+  const cityStats = topCities(ads);
+  const adStats = topAds(ads, counts);
 
   return (
     <main style={{ padding: 20, fontFamily: "Arial", background: "#f5f5f0", minHeight: "100vh" }}>
@@ -166,6 +177,19 @@ export default function Page() {
         <div><h1 style={{ margin: 0 }}>feelfree</h1><p style={{ color: "#555", marginTop: 4 }}>Anonymous classifieds. City-level location only.</p></div>
         <div style={{ ...cardStyle, padding: "8px 12px", textAlign: "right", minWidth: 110 }}><div style={{ color: "#777", fontSize: 12 }}>visits</div><strong>{visits === null ? "-" : visits}</strong></div>
       </div>
+
+      <section style={{ ...cardStyle, margin: "12px 0 16px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
+          <div><div style={{ color: "#777", fontSize: 12 }}>ads</div><strong>{ads.length}</strong></div>
+          <div><div style={{ color: "#777", fontSize: 12 }}>answers</div><strong>{totalAnswers}</strong></div>
+          <div><div style={{ color: "#777", fontSize: 12 }}>cities</div><strong>{cityStats.length}</strong></div>
+          <div><div style={{ color: "#777", fontSize: 12 }}>search results</div><strong>{filtered.length}</strong></div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 10 }}>
+          <div><div style={{ fontWeight: "bold", marginBottom: 4 }}>Top cities</div>{cityStats.length ? cityStats.map(([city, count]) => <div key={city} style={{ color: "#555", fontSize: 13 }}>{city}: {count}</div>) : <div style={{ color: "#777", fontSize: 13 }}>No data yet</div>}</div>
+          <div><div style={{ fontWeight: "bold", marginBottom: 4 }}>Most answered</div>{adStats.length ? adStats.map((ad) => <div key={ad.id} style={{ color: "#555", fontSize: 13 }}>{ad.title}: {counts[ad.id] || 0}</div>) : <div style={{ color: "#777", fontSize: 13 }}>No data yet</div>}</div>
+        </div>
+      </section>
 
       <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 0.85fr) minmax(420px, 2.15fr)", gap: 16, alignItems: "start" }}>
         <aside style={{ display: "grid", gap: 12 }}>
