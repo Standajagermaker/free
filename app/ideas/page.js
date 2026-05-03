@@ -1,3 +1,4 @@
+"use client";
 async function loadEvents() {
   try {
     const res = await fetch("/api/events");
