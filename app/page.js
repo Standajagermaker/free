@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-const CITY_COORDS = {
+const FALLBACK_CITY_COORDS = {
   prague: { lat: 50.0755, lng: 14.4378 },
   praha: { lat: 50.0755, lng: 14.4378 },
   brno: { lat: 49.1951, lng: 16.6068 },
@@ -49,17 +49,49 @@ function normalizeCity(city) {
   return String(city || "").trim().toLowerCase();
 }
 
+function toNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+async function geocodeCity(city) {
+  const key = normalizeCity(city);
+  if (FALLBACK_CITY_COORDS[key]) return FALLBACK_CITY_COORDS[key];
+
+  try {
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(city)}`,
+      { headers: { Accept: "application/json" } }
+    );
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (!data[0]) return null;
+    const lat = Number(data[0].lat);
+    const lng = Number(data[0].lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return { lat, lng };
+  } catch {
+    return null;
+  }
+}
+
 function cityGroups(ads) {
   const groups = new Map();
   ads.forEach((ad) => {
     const rawCity = ad.city || "Unknown";
     const key = normalizeCity(rawCity);
-    if (!groups.has(key)) groups.set(key, { city: rawCity, count: 0, ads: [] });
+    const lat = toNumber(ad.lat);
+    const lng = toNumber(ad.lng);
+    const fallback = FALLBACK_CITY_COORDS[key] || null;
+    const coords = lat !== null && lng !== null ? { lat, lng } : fallback;
+
+    if (!groups.has(key)) groups.set(key, { city: rawCity, count: 0, ads: [], coords });
     const group = groups.get(key);
     group.count += 1;
     group.ads.push(ad);
+    if (!group.coords && coords) group.coords = coords;
   });
-  return [...groups.entries()].map(([key, group]) => ({ key, ...group, coords: CITY_COORDS[key] || null }));
+  return [...groups.entries()].map(([key, group]) => ({ key, ...group }));
 }
 
 function AnonymousCityMap({ ads }) {
@@ -69,7 +101,7 @@ function AnonymousCityMap({ ads }) {
     return (
       <div style={{ ...cardStyle, marginTop: 16 }}>
         <h2 style={{ marginTop: 0 }}>City map</h2>
-        <p style={{ color: "#777" }}>No known city locations yet. Add an ad with city like Prague, Brno, Berlin, Vienna, London or Paris.</p>
+        <p style={{ color: "#777" }}>No mapped city locations yet. Add an ad with a city name.</p>
       </div>
     );
   }
@@ -86,7 +118,7 @@ function AnonymousCityMap({ ads }) {
   function pointStyle(group) {
     const x = 8 + ((group.coords.lng - minLng) / lngSpan) * 84;
     const y = 92 - ((group.coords.lat - minLat) / latSpan) * 84;
-    const size = Math.min(34 + group.count * 12, 96);
+    const size = Math.min(34 + group.count * 12, 104);
     return {
       left: `${x}%`,
       top: `${y}%`,
@@ -114,7 +146,7 @@ function AnonymousCityMap({ ads }) {
         ))}
       </div>
       <p style={{ color: "#777", fontSize: 13, lineHeight: 1.5 }}>
-        Circles show only the city area, never a street or exact position. This protects anonymity while still showing where ads are active.
+        Circles show only the city area, never a street or exact position. Coordinates are saved only at city level.
       </p>
     </div>
   );
@@ -142,29 +174,37 @@ export default function Page() {
   );
 
   async function api(path, options = {}) {
-    if (!supabaseUrl || !anonKey) {
-      throw new Error("Missing Supabase environment variables.");
-    }
-
+    if (!supabaseUrl || !anonKey) throw new Error("Missing Supabase environment variables.");
     return fetch(`${supabaseUrl}${path}`, {
       ...options,
-      headers: {
-        ...headers,
-        ...(options.headers || {}),
-      },
+      headers: { ...headers, ...(options.headers || {}) },
     });
+  }
+
+  async function uploadImage(file) {
+    if (!file || file.size === 0) return "";
+
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+    const filePath = `${Date.now()}-${safeName}`;
+    const response = await fetch(`${supabaseUrl}/storage/v1/object/ads/${filePath}`, {
+      method: "POST",
+      headers: {
+        apikey: anonKey,
+        Authorization: `Bearer ${anonKey}`,
+        "Content-Type": file.type || "application/octet-stream",
+        "x-upsert": "false",
+      },
+      body: file,
+    });
+
+    if (!response.ok) throw new Error(await response.text());
+    return `${supabaseUrl}/storage/v1/object/public/ads/${filePath}`;
   }
 
   async function loadAds() {
     try {
-      const response = await api(
-        "/rest/v1/ads?select=*&order=created_at.desc&limit=100"
-      );
-
-      if (!response.ok) {
-        throw new Error(await response.text());
-      }
-
+      const response = await api("/rest/v1/ads?select=*&order=created_at.desc&limit=100");
+      if (!response.ok) throw new Error(await response.text());
       const data = await response.json();
       setAds(data);
     } catch (error) {
@@ -175,18 +215,12 @@ export default function Page() {
   async function loadResponseCounts() {
     try {
       const response = await api("/rest/v1/responses?select=ad_id");
-
-      if (!response.ok) {
-        return;
-      }
-
+      if (!response.ok) return;
       const data = await response.json();
-
       const counts = data.reduce((acc, item) => {
         acc[item.ad_id] = (acc[item.ad_id] || 0) + 1;
         return acc;
       }, {});
-
       setResponseCounts(counts);
     } catch {
       setResponseCounts({});
@@ -211,33 +245,35 @@ export default function Page() {
     setLoading(true);
     setStatus("");
 
-    const payload = {
-      title: form.get("title") || "Untitled",
-      description: form.get("description") || "",
-      city: form.get("city") || "Unknown",
-      password: form.get("password") || "",
-      image_url: "",
-    };
-
     try {
+      const city = form.get("city") || "Unknown";
+      const coords = await geocodeCity(city);
+      const imageUrl = await uploadImage(form.get("image"));
+
+      const payload = {
+        title: form.get("title") || "Untitled",
+        description: form.get("description") || "",
+        city,
+        lat: coords?.lat || null,
+        lng: coords?.lng || null,
+        password: form.get("password") || "",
+        image_url: imageUrl,
+      };
+
       if (!payload.password || payload.password.length < 3) {
         throw new Error("Password must have at least 3 characters.");
       }
 
       const response = await api("/rest/v1/ads", {
         method: "POST",
-        headers: {
-          Prefer: "return=minimal",
-        },
+        headers: { Prefer: "return=minimal" },
         body: JSON.stringify(payload),
       });
 
-      if (!response.ok) {
-        throw new Error(await response.text());
-      }
+      if (!response.ok) throw new Error(await response.text());
 
       formEl.reset();
-      setStatus("Ad created. Remember your password.");
+      setStatus("Ad created. City coordinates and image were saved.");
       await refreshAll();
     } catch (error) {
       setStatus(`Error: ${error.message}`);
@@ -263,16 +299,10 @@ export default function Page() {
     try {
       const response = await api("/rest/v1/responses", {
         method: "POST",
-        headers: {
-          Prefer: "return=minimal",
-        },
+        headers: { Prefer: "return=minimal" },
         body: JSON.stringify(payload),
       });
-
-      if (!response.ok) {
-        throw new Error(await response.text());
-      }
-
+      if (!response.ok) throw new Error(await response.text());
       formEl.reset();
       setStatus("Reply sent anonymously.");
       await loadResponseCounts();
@@ -283,7 +313,6 @@ export default function Page() {
 
   async function readReplies(ad) {
     setStatus("");
-
     const password = replyPasswords[ad.id] || "";
 
     if (password !== ad.password) {
@@ -292,14 +321,8 @@ export default function Page() {
     }
 
     try {
-      const response = await api(
-        `/rest/v1/responses?ad_id=eq.${ad.id}&select=*&order=created_at.desc`
-      );
-
-      if (!response.ok) {
-        throw new Error(await response.text());
-      }
-
+      const response = await api(`/rest/v1/responses?ad_id=eq.${ad.id}&select=*&order=created_at.desc`);
+      if (!response.ok) throw new Error(await response.text());
       const replies = await response.json();
       setSelectedAd({ ...ad, replies });
     } catch (error) {
@@ -308,237 +331,93 @@ export default function Page() {
   }
 
   const filteredAds = ads.filter((ad) => {
-    const haystack = `${ad.title || ""} ${ad.description || ""} ${
-      ad.city || ""
-    }`.toLowerCase();
-
+    const haystack = `${ad.title || ""} ${ad.description || ""} ${ad.city || ""}`.toLowerCase();
     return haystack.includes(query.toLowerCase());
   });
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "#f5f5f0",
-        color: "#111",
-        fontFamily: "Arial, sans-serif",
-        padding: 30,
-      }}
-    >
+    <main style={{ minHeight: "100vh", background: "#f5f5f0", color: "#111", fontFamily: "Arial, sans-serif", padding: 30 }}>
       <section style={{ maxWidth: 1050, margin: "0 auto" }}>
         <header style={{ marginBottom: 28 }}>
-          <p style={{ fontWeight: "bold", color: "#666", margin: 0 }}>
-            Anonymous classifieds
-          </p>
-
+          <p style={{ fontWeight: "bold", color: "#666", margin: 0 }}>Anonymous classifieds</p>
           <h1 style={{ fontSize: 58, margin: "8px 0" }}>feelfree</h1>
-
           <p style={{ fontSize: 19, lineHeight: 1.5, color: "#444" }}>
-            Post anything legal. Stay anonymous. Replies are hidden and can be
-            read only with the ad password.
+            Post anything legal. Stay anonymous. Replies are hidden and can be read only with the ad password.
           </p>
-
-          <p
-            style={{
-              background: "#fff7d6",
-              padding: 14,
-              borderRadius: 12,
-              border: "1px solid #ead48a",
-              color: "#6b5500",
-            }}
-          >
-            Safety rule: do not post illegal goods, weapons, drugs, explicit
-            content, personal data, threats, harassment, or scams.
+          <p style={{ background: "#fff7d6", padding: 14, borderRadius: 12, border: "1px solid #ead48a", color: "#6b5500" }}>
+            Safety rule: do not post illegal goods, weapons, drugs, explicit content, personal data, threats, harassment, or scams.
           </p>
         </header>
 
         <AnonymousCityMap ads={filteredAds} />
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(280px, 420px) 1fr",
-            gap: 22,
-            alignItems: "start",
-            marginTop: 22,
-          }}
-        >
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 420px) 1fr", gap: 22, alignItems: "start", marginTop: 22 }}>
           <section style={cardStyle}>
             <h2 style={{ marginTop: 0 }}>Create ad</h2>
 
             <form onSubmit={createAd} style={{ display: "grid", gap: 12 }}>
-              <input
-                name="title"
-                placeholder="Title"
-                required
-                style={inputStyle}
-              />
-
-              <textarea
-                name="description"
-                placeholder="What are you offering / looking for?"
-                required
-                rows={7}
-                style={inputStyle}
-              />
-
-              <input
-                name="city"
-                placeholder="City only, e.g. Prague"
-                required
-                style={inputStyle}
-              />
-
-              <input
-                name="password"
-                placeholder="Your secret password"
-                required
-                style={inputStyle}
-              />
-
-              <button disabled={loading} style={buttonStyle}>
-                {loading ? "Posting..." : "Post anonymously"}
-              </button>
+              <input name="title" placeholder="Title" required style={inputStyle} />
+              <textarea name="description" placeholder="What are you offering / looking for?" required rows={7} style={inputStyle} />
+              <input name="city" placeholder="City only, e.g. Prague" required style={inputStyle} />
+              <input name="password" placeholder="Your secret password" required style={inputStyle} />
+              <input name="image" type="file" accept="image/*" style={inputStyle} />
+              <button disabled={loading} style={buttonStyle}>{loading ? "Posting..." : "Post anonymously"}</button>
             </form>
 
             <p style={{ color: "#777", fontSize: 13, lineHeight: 1.5 }}>
-              Keep the password. Without it, you cannot read replies. Ads are
-              designed to expire after 30 days.
+              Keep the password. City is converted to approximate coordinates only. Exact location is never stored.
             </p>
           </section>
 
           <section style={cardStyle}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 12,
-                alignItems: "center",
-                flexWrap: "wrap",
-              }}
-            >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
               <h2 style={{ margin: 0 }}>Browse ads</h2>
-
-              <button
-                onClick={refreshAll}
-                style={{ ...buttonStyle, background: "#333" }}
-              >
-                Refresh
-              </button>
+              <button onClick={refreshAll} style={{ ...buttonStyle, background: "#333" }}>Refresh</button>
             </div>
 
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search title, text or city..."
-              style={{ ...inputStyle, marginTop: 14 }}
-            />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search title, text or city..." style={{ ...inputStyle, marginTop: 14 }} />
 
-            {status && (
-              <p
-                style={{
-                  color:
-                    status.startsWith("Error") || status.startsWith("Wrong")
-                      ? "#b91c1c"
-                      : "#166534",
-                }}
-              >
-                {status}
-              </p>
-            )}
+            {status && <p style={{ color: status.startsWith("Error") || status.startsWith("Wrong") ? "#b91c1c" : "#166534" }}>{status}</p>}
 
             <div style={{ display: "grid", gap: 14, marginTop: 16 }}>
               {filteredAds.map((ad) => (
-                <article
-                  key={ad.id}
-                  style={{
-                    border: "1px solid #ddd",
-                    borderRadius: 14,
-                    padding: 16,
-                    background: "#fafafa",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 12,
-                    }}
-                  >
-                    <h3 style={{ margin: 0 }}>{ad.title}</h3>
+                <article key={ad.id} style={{ border: "1px solid #ddd", borderRadius: 14, padding: 16, background: "#fafafa" }}>
+                  {ad.image_url && <img src={ad.image_url} alt="Ad image" style={{ width: "100%", maxHeight: 260, objectFit: "cover", borderRadius: 12, marginBottom: 12 }} />}
 
-                    <span style={{ color: "#666" }}>
-                      {responseCounts[ad.id] || 0} replies
-                    </span>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                    <h3 style={{ margin: 0 }}>{ad.title}</h3>
+                    <span style={{ color: "#666" }}>{responseCounts[ad.id] || 0} replies</span>
                   </div>
 
                   <p style={{ color: "#555" }}>{ad.city}</p>
-
                   <p style={{ lineHeight: 1.55 }}>{ad.description}</p>
-
                   <p style={{ color: "#777", fontSize: 13 }}>
-                    Posted: {String(ad.created_at || "").slice(0, 10)} ·
-                    expires after 30 days
+                    Posted: {String(ad.created_at || "").slice(0, 10)} · city-level location only · expires after 30 days
                   </p>
 
                   <details style={{ marginTop: 12 }}>
-                    <summary style={{ cursor: "pointer", fontWeight: "bold" }}>
-                      Reply to this ad
-                    </summary>
-
-                    <form
-                      onSubmit={(event) => sendReply(event, ad)}
-                      style={{ display: "grid", gap: 8, marginTop: 10 }}
-                    >
-                      <textarea
-                        name="message"
-                        placeholder="Your message"
-                        required
-                        rows={3}
-                        style={inputStyle}
-                      />
-
-                      <input
-                        name="contact"
-                        placeholder="Your contact, e.g. email/phone/Telegram"
-                        required
-                        style={inputStyle}
-                      />
-
+                    <summary style={{ cursor: "pointer", fontWeight: "bold" }}>Reply to this ad</summary>
+                    <form onSubmit={(event) => sendReply(event, ad)} style={{ display: "grid", gap: 8, marginTop: 10 }}>
+                      <textarea name="message" placeholder="Your message" required rows={3} style={inputStyle} />
+                      <input name="contact" placeholder="Your contact, e.g. email/phone/Telegram" required style={inputStyle} />
                       <button style={buttonStyle}>Send reply</button>
                     </form>
                   </details>
 
                   <details style={{ marginTop: 12 }}>
-                    <summary style={{ cursor: "pointer", fontWeight: "bold" }}>
-                      Read replies with password
-                    </summary>
-
+                    <summary style={{ cursor: "pointer", fontWeight: "bold" }}>Read replies with password</summary>
                     <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                       <input
                         value={replyPasswords[ad.id] || ""}
-                        onChange={(event) =>
-                          setReplyPasswords({
-                            ...replyPasswords,
-                            [ad.id]: event.target.value,
-                          })
-                        }
+                        onChange={(event) => setReplyPasswords({ ...replyPasswords, [ad.id]: event.target.value })}
                         placeholder="Ad password"
                         style={inputStyle}
                       />
-
-                      <button
-                        type="button"
-                        onClick={() => readReplies(ad)}
-                        style={buttonStyle}
-                      >
-                        Open
-                      </button>
+                      <button type="button" onClick={() => readReplies(ad)} style={buttonStyle}>Open</button>
                     </div>
                   </details>
                 </article>
               ))}
-
               {!filteredAds.length && <p style={{ color: "#777" }}>No ads found.</p>}
             </div>
           </section>
@@ -547,26 +426,12 @@ export default function Page() {
         {selectedAd && (
           <section style={{ ...cardStyle, marginTop: 22 }}>
             <h2>Replies for: {selectedAd.title}</h2>
-
-            {selectedAd.replies?.length ? (
-              selectedAd.replies.map((reply) => (
-                <article
-                  key={reply.id}
-                  style={{
-                    borderTop: "1px solid #eee",
-                    paddingTop: 12,
-                    marginTop: 12,
-                  }}
-                >
-                  <p>{reply.message}</p>
-                  <p>
-                    <strong>Contact:</strong> {reply.contact}
-                  </p>
-                </article>
-              ))
-            ) : (
-              <p>No replies yet.</p>
-            )}
+            {selectedAd.replies?.length ? selectedAd.replies.map((reply) => (
+              <article key={reply.id} style={{ borderTop: "1px solid #eee", paddingTop: 12, marginTop: 12 }}>
+                <p>{reply.message}</p>
+                <p><strong>Contact:</strong> {reply.contact}</p>
+              </article>
+            )) : <p>No replies yet.</p>}
           </section>
         )}
       </section>
