@@ -164,7 +164,7 @@ export default function Page() {
     <main style={{ padding: 20, fontFamily: "Arial", background: "#f5f5f0", minHeight: "100vh" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 16 }}>
         <div>
-          <h1 style={{ margin: 0 }}>feelfree</h1>
+          <h1 style={{ margin: 0 }}>feel free 2</h1>
           <p style={{ color: "#555", marginTop: 4 }}>Anonymous. Free announce, free your mind, feel free to enjoy, offer, share, invite, organize ...</p>
         </div>
         <div style={{ ...cardStyle, padding: "8px 12px", textAlign: "right", minWidth: 110 }}><div style={{ color: "#777", fontSize: 12 }}>visits</div><strong>{visits === null ? "-" : visits}</strong></div>
