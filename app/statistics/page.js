@@ -6,6 +6,7 @@ export default function Statistics() {
   const [ads, setAds] = useState([]);
   const [counts, setCounts] = useState({});
   const [visits, setVisits] = useState(0);
+  const [importResult, setImportResult] = useState(null);
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -36,6 +37,13 @@ export default function Statistics() {
     setVisits(visitCount);
   }
 
+  async function runImport() {
+    setImportResult("running...");
+    const res = await fetch("/api/import-events", { method: "POST" });
+    const data = await res.json();
+    setImportResult(JSON.stringify(data, null, 2));
+  }
+
   useEffect(() => { loadAll(); }, []);
 
   const totalAnswers = Object.values(counts).reduce((a, b) => a + b, 0);
@@ -51,6 +59,16 @@ export default function Statistics() {
   return (
     <main style={{padding:30,fontFamily:"Arial"}}>
       <h1>statistics</h1>
+
+      <button onClick={runImport} style={{marginBottom:20,padding:10,borderRadius:8,background:"black",color:"white"}}>
+        Import events (50+ cities)
+      </button>
+
+      {importResult && (
+        <pre style={{background:"#111",color:"#0f0",padding:10,fontSize:12}}>
+          {importResult}
+        </pre>
+      )}
 
       <p>visits: <b>{visits}</b></p>
       <p>ads: <b>{ads.length}</b></p>
