@@ -2,6 +2,22 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+const CITY_COORDS = {
+  prague: { lat: 50.0755, lng: 14.4378 },
+  praha: { lat: 50.0755, lng: 14.4378 },
+  brno: { lat: 49.1951, lng: 16.6068 },
+  ostrava: { lat: 49.8209, lng: 18.2625 },
+  plzen: { lat: 49.7384, lng: 13.3736 },
+  pilsen: { lat: 49.7384, lng: 13.3736 },
+  olomouc: { lat: 49.5938, lng: 17.2509 },
+  liberec: { lat: 50.7663, lng: 15.0543 },
+  berlin: { lat: 52.52, lng: 13.405 },
+  vienna: { lat: 48.2082, lng: 16.3738 },
+  wien: { lat: 48.2082, lng: 16.3738 },
+  london: { lat: 51.5072, lng: -0.1276 },
+  paris: { lat: 48.8566, lng: 2.3522 },
+};
+
 const cardStyle = {
   border: "1px solid #ddd",
   borderRadius: 16,
@@ -28,6 +44,81 @@ const buttonStyle = {
   fontWeight: "bold",
   cursor: "pointer",
 };
+
+function normalizeCity(city) {
+  return String(city || "").trim().toLowerCase();
+}
+
+function cityGroups(ads) {
+  const groups = new Map();
+  ads.forEach((ad) => {
+    const rawCity = ad.city || "Unknown";
+    const key = normalizeCity(rawCity);
+    if (!groups.has(key)) groups.set(key, { city: rawCity, count: 0, ads: [] });
+    const group = groups.get(key);
+    group.count += 1;
+    group.ads.push(ad);
+  });
+  return [...groups.entries()].map(([key, group]) => ({ key, ...group, coords: CITY_COORDS[key] || null }));
+}
+
+function AnonymousCityMap({ ads }) {
+  const groups = cityGroups(ads).filter((group) => group.coords);
+
+  if (!groups.length) {
+    return (
+      <div style={{ ...cardStyle, marginTop: 16 }}>
+        <h2 style={{ marginTop: 0 }}>City map</h2>
+        <p style={{ color: "#777" }}>No known city locations yet. Add an ad with city like Prague, Brno, Berlin, Vienna, London or Paris.</p>
+      </div>
+    );
+  }
+
+  const lats = groups.map((group) => group.coords.lat);
+  const lngs = groups.map((group) => group.coords.lng);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+  const latSpan = Math.max(maxLat - minLat, 0.01);
+  const lngSpan = Math.max(maxLng - minLng, 0.01);
+
+  function pointStyle(group) {
+    const x = 8 + ((group.coords.lng - minLng) / lngSpan) * 84;
+    const y = 92 - ((group.coords.lat - minLat) / latSpan) * 84;
+    const size = Math.min(34 + group.count * 12, 96);
+    return {
+      left: `${x}%`,
+      top: `${y}%`,
+      width: size,
+      height: size,
+      marginLeft: -size / 2,
+      marginTop: -size / 2,
+    };
+  }
+
+  return (
+    <div style={{ ...cardStyle, marginTop: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <h2 style={{ margin: 0 }}>City map</h2>
+        <span style={{ color: "#777", fontSize: 13 }}>Approximate city-level areas only</span>
+      </div>
+      <div style={{ position: "relative", height: 280, marginTop: 14, borderRadius: 16, overflow: "hidden", background: "linear-gradient(135deg, #e9f0e5, #d9e5ef)", border: "1px solid #d5d5d5" }}>
+        <div style={{ position: "absolute", inset: 0, backgroundImage: "linear-gradient(rgba(0,0,0,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.05) 1px, transparent 1px)", backgroundSize: "28px 28px" }} />
+        {groups.map((group) => (
+          <div key={group.key} title={`${group.city}: ${group.count} ads`} style={{ position: "absolute", borderRadius: "999px", border: "3px solid #111", background: "rgba(17, 17, 17, 0.14)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", ...pointStyle(group) }}>
+            <div style={{ background: "white", border: "1px solid #ddd", borderRadius: 999, padding: "5px 8px", fontSize: 12, boxShadow: "0 4px 14px rgba(0,0,0,0.12)" }}>
+              {group.city} · {group.count}
+            </div>
+          </div>
+        ))}
+      </div>
+      <p style={{ color: "#777", fontSize: 13, lineHeight: 1.5 }}>
+        Circles show only the city area, never a street or exact position. This protects anonymity while still showing where ads are active.
+      </p>
+    </div>
+  );
+}
 
 export default function Page() {
   const [ads, setAds] = useState([]);
@@ -261,12 +352,15 @@ export default function Page() {
           </p>
         </header>
 
+        <AnonymousCityMap ads={filteredAds} />
+
         <div
           style={{
             display: "grid",
             gridTemplateColumns: "minmax(280px, 420px) 1fr",
             gap: 22,
             alignItems: "start",
+            marginTop: 22,
           }}
         >
           <section style={cardStyle}>
