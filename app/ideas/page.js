@@ -28,6 +28,13 @@ const smallButton = {
   fontSize: 13,
 };
 
+const primarySmallButton = {
+  ...smallButton,
+  background: "#111",
+  color: "white",
+  border: "1px solid #111",
+};
+
 function todayISO(offset = 0) {
   const d = new Date();
   d.setDate(d.getDate() + offset);
@@ -57,7 +64,7 @@ function teaserFor(event) {
   const category = event.category || "event";
 
   if (category.includes("cinema")) {
-    return `Movie vibe: check what is playing, pick a screening, then post: who wants to join me for ${title}?`;
+    return `Movie vibe: ${title} sounds like a good reason to stop scrolling and ask who wants to join.`;
   }
   if (category.includes("concert") || category.includes("festival")) {
     return `Good excuse to gather people: music, atmosphere and a clear plan in ${city}.`;
@@ -72,6 +79,14 @@ function teaserFor(event) {
     return `Low-pressure idea: walk, taste something, talk, and see where the day goes.`;
   }
   return `Idea starter: use this as a reason to write “hey, who wants to join me?”`;
+}
+
+function inviteUrl(event) {
+  const title = encodeURIComponent(`Anyone for ${event.title || "this event"}?`);
+  const city = encodeURIComponent(event.city || "");
+  const date = encodeURIComponent(event.event_date || "");
+  const time = encodeURIComponent(event.event_time || "");
+  return `/?title=${title}&city=${city}&event_date=${date}&event_time=${time}`;
 }
 
 export default function Ideas() {
@@ -128,17 +143,14 @@ export default function Ideas() {
       <section style={{ ...card, marginBottom: 16 }}>
         <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr auto", gap: 10, alignItems: "center" }}>
           <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Fulltext search: film, concert, city, source..." style={input} />
-
           <select value={city} onChange={e => setCity(e.target.value)} style={input}>
             <option value="">All cities</option>
             {cities.map(c => <option key={c}>{c}</option>)}
           </select>
-
           <select value={category} onChange={e => setCategory(e.target.value)} style={input}>
             <option value="">All categories</option>
             {categories.map(c => <option key={c}>{c}</option>)}
           </select>
-
           <span style={{ color: "#777", fontSize: 13, whiteSpace: "nowrap" }}>{filtered.length} ideas</span>
         </div>
       </section>
@@ -163,13 +175,12 @@ export default function Ideas() {
 
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                     <span style={{ color: "#888", fontSize: 12 }}>
-                      {e.category || "event"} · {e.source || "external"} · {e.event_date || "date TBA"} {e.event_time || "time TBA"}
+                      {e.event_date || "date TBA"} {e.event_time || "time TBA"} · {e.category || "event"} · {e.source || "external"}
                     </span>
-                    {e.url && (
-                      <a href={e.url} target="_blank" rel="noreferrer" style={smallButton}>
-                        Open
-                      </a>
-                    )}
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <a href={inviteUrl(e)} style={primarySmallButton}>Invite someone</a>
+                      {e.url && <a href={e.url} target="_blank" rel="noreferrer" style={smallButton}>Open</a>}
+                    </div>
                   </div>
                 </article>
               ))}
