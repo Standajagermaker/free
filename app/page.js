@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 
 const Map = dynamic(() => import("./Map"), { ssr: false });
@@ -30,6 +30,7 @@ function eventLabel(ad) {
   if (time) return time;
   return String(ad.created_at || "").slice(0, 10);
 }
+function isPublicAd(ad) { return ad.response_mode === "public" || ad.is_public_contact === true; }
 
 async function geocodeCity(city) {
   const key = normalizeCity(city);
@@ -54,6 +55,9 @@ export default function Page() {
   const [openRead, setOpenRead] = useState(null);
   const [readPasswords, setReadPasswords] = useState({});
   const [openedReplies, setOpenedReplies] = useState({});
+  const [responseMode, setResponseMode] = useState("secret");
+  const [prefill, setPrefill] = useState({ title: "", city: "", event_date: "", event_time: "" });
+  const passwordRef = useRef(null);
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -90,7 +94,25 @@ export default function Page() {
   }
 
   async function refreshAll() { await loadAds(); await loadCounts(); }
-  useEffect(() => { refreshAll(); trackVisit(); }, []);
+
+  useEffect(() => {
+    refreshAll();
+    trackVisit();
+
+    const params = new URLSearchParams(window.location.search);
+    const nextPrefill = {
+      title: params.get("title") || "",
+      city: params.get("city") || "",
+      event_date: params.get("event_date") || "",
+      event_time: params.get("event_time") || ""
+    };
+    setPrefill(nextPrefill);
+
+    if (nextPrefill.title || nextPrefill.city || nextPrefill.event_date) {
+      setStatus("Invite draft loaded. Choose public contact or secret replies. If secret, set a password before posting.");
+      setTimeout(() => passwordRef.current?.focus(), 350);
+    }
+  }, []);
 
   async function uploadImage(file) {
     if (!file || file.size === 0) return "";
@@ -108,6 +130,8 @@ export default function Page() {
     setLoading(true); setStatus("");
     try {
       const city = form.get("city") || "Unknown";
+      const mode = form.get("response_mode") || "secret";
+      const password = form.get("password") || "";
       const coords = await geocodeCity(city);
       const imageUrl = await uploadImage(form.get("image"));
       const payload = {
@@ -118,13 +142,16 @@ export default function Page() {
         lng: coords?.lng || null,
         event_date: form.get("event_date") || null,
         event_time: form.get("event_time") || null,
-        password: form.get("password") || "",
+        response_mode: mode,
+        public_contact: form.get("public_contact") || null,
+        password: mode === "secret" ? password : "",
         image_url: imageUrl
       };
-      if (!payload.password || payload.password.length < 3) throw new Error("Password must have at least 3 characters.");
+      if (mode === "secret" && (!payload.password || payload.password.length < 3)) throw new Error("Secret replies need a password with at least 3 characters.");
+      if (mode === "public" && !payload.public_contact) throw new Error("Public mode needs a public contact or meeting note.");
       const res = await fetch(`${supabaseUrl}/rest/v1/ads`, { method: "POST", headers: { ...authHeaders, "Content-Type": "application/json", Prefer: "return=minimal" }, body: JSON.stringify(payload) });
       if (!res.ok) throw new Error(await res.text());
-      formEl.reset(); setStatus("Ad created."); await refreshAll();
+      formEl.reset(); setPrefill({ title: "", city: "", event_date: "", event_time: "" }); setResponseMode("secret"); setStatus("Ad created."); await refreshAll();
     } catch (error) { setStatus(`Error: ${error.message}`); }
     finally { setLoading(false); }
   }
@@ -144,8 +171,10 @@ export default function Page() {
 
   async function readReplies(ad) {
     setStatus("");
-    const password = readPasswords[ad.id] || "";
-    if (password !== ad.password) { setStatus("Wrong password for this ad."); return; }
+    if (!isPublicAd(ad)) {
+      const password = readPasswords[ad.id] || "";
+      if (password !== ad.password) { setStatus("Wrong password for this ad."); return; }
+    }
     try {
       const res = await fetch(`${supabaseUrl}/rest/v1/responses?ad_id=eq.${ad.id}&select=*&order=created_at.desc`, { headers: authHeaders });
       if (!res.ok) throw new Error(await res.text());
@@ -176,12 +205,32 @@ export default function Page() {
           <section style={cardStyle}>
             <h2 style={{ margin: "0 0 10px", fontSize: 18 }}>Add ad</h2>
             <form onSubmit={createAd} style={{ display: "grid", gap: 8 }}>
-              <input name="title" placeholder="Title" required style={inputStyle} />
-              <textarea name="description" placeholder="Description" required rows={4} style={inputStyle} />
-              <input name="city" placeholder="City only" required style={inputStyle} />
-              <input name="event_date" placeholder="Date / period, e.g. today, tomorrow, 01.01.2026 or May-June 2027" style={inputStyle} />
-              <input name="event_time" placeholder="Time, e.g. 10:00-18:00, evening, all day" style={inputStyle} />
-              <input name="password" placeholder="Password to read replies" required style={inputStyle} />
+              <input name="title" placeholder="Title" required style={inputStyle} value={prefill.title} onChange={(e) => setPrefill({ ...prefill, title: e.target.value })} />
+              <textarea name="description" placeholder="Description" required rows={4} style={inputStyle} defaultValue={prefill.title ? `Hey, who wants to join me for ${prefill.title}?` : ""} />
+              <input name="city" placeholder="City only" required style={inputStyle} value={prefill.city} onChange={(e) => setPrefill({ ...prefill, city: e.target.value })} />
+              <input name="event_date" placeholder="Date / period, e.g. today, tomorrow, 01.01.2026 or May-June 2027" style={inputStyle} value={prefill.event_date} onChange={(e) => setPrefill({ ...prefill, event_date: e.target.value })} />
+              <input name="event_time" placeholder="Time, e.g. 10:00-18:00, evening, all day" style={inputStyle} value={prefill.event_time} onChange={(e) => setPrefill({ ...prefill, event_time: e.target.value })} />
+
+              <div style={{ display: "grid", gap: 6, background: "#fafafa", border: "1px solid #eee", borderRadius: 10, padding: 10 }}>
+                <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input type="radio" name="response_mode" value="secret" checked={responseMode === "secret"} onChange={() => setResponseMode("secret")} />
+                  Secret replies - read with password
+                </label>
+                <label style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input type="radio" name="response_mode" value="public" checked={responseMode === "public"} onChange={() => setResponseMode("public")} />
+                  Public contact - no password needed
+                </label>
+              </div>
+
+              {responseMode === "public" && <input name="public_contact" placeholder="Public contact / meeting note, e.g. Telegram @name or meet at entrance" style={inputStyle} />}
+
+              {responseMode === "secret" && (
+                <>
+                  <input ref={passwordRef} name="password" type="password" placeholder="Password to read replies - do not forget this" autoComplete="new-password" required style={{ ...inputStyle, border: prefill.title ? "2px solid #111" : "1px solid #ddd" }} />
+                  <p style={{ margin: 0, color: "#777", fontSize: 12 }}>Tip: your browser/password manager may offer to save it, but this is not a normal login. Keep it somewhere safe.</p>
+                </>
+              )}
+
               <input name="image" type="file" accept="image/*" style={inputStyle} />
               <button disabled={loading} style={buttonStyle}>{loading ? "Posting..." : "Post"}</button>
             </form>
@@ -195,6 +244,7 @@ export default function Page() {
           <div style={{ display: "grid", gap: 8 }}>
             {filtered.map(ad => {
               const answerCount = counts[ad.id] || 0;
+              const publicMode = isPublicAd(ad);
               return (
                 <article key={ad.id} style={{ border: "1px solid #ddd", padding: 10, borderRadius: 10, fontSize: 14, background: "#fafafa" }}>
                   <div style={{ display: "grid", gridTemplateColumns: ad.image_url ? "96px 1fr" : "1fr", gap: 10 }}>
@@ -202,11 +252,12 @@ export default function Page() {
                     <div>
                       <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}><b>{ad.title}</b><span style={{ color: "#666", whiteSpace: "nowrap" }}>{ad.city}</span></div>
                       <div style={{ color: "#555", margin: "5px 0", lineHeight: 1.35 }}>{ad.description}</div>
+                      {publicMode && ad.public_contact && <div style={{ color: "#166534", margin: "5px 0", fontSize: 13 }}><b>Public contact:</b> {ad.public_contact}</div>}
                       <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
-                        <span style={{ color: "#888", fontSize: 12 }}>{eventLabel(ad)} · {answersLabel(answerCount)}</span>
+                        <span style={{ color: "#888", fontSize: 12 }}>{eventLabel(ad)} · {answersLabel(answerCount)} · {publicMode ? "public" : "secret"}</span>
                         <div style={{ display: "flex", gap: 6 }}>
                           <button onClick={() => setOpenReply(openReply === ad.id ? null : ad.id)} style={smallButton}>{answerCount ? "Reply" : "Reply now"}</button>
-                          <button onClick={() => setOpenRead(openRead === ad.id ? null : ad.id)} style={smallButton}>Read</button>
+                          <button onClick={() => { setOpenRead(openRead === ad.id ? null : ad.id); if (publicMode) readReplies(ad); }} style={smallButton}>Read</button>
                         </div>
                       </div>
                     </div>
@@ -222,10 +273,12 @@ export default function Page() {
 
                   {openRead === ad.id && (
                     <div style={{ marginTop: 10 }}>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8 }}>
-                        <input value={readPasswords[ad.id] || ""} onChange={(event) => setReadPasswords({ ...readPasswords, [ad.id]: event.target.value })} placeholder="Password" style={inputStyle} />
-                        <button onClick={() => readReplies(ad)} style={buttonStyle}>Open</button>
-                      </div>
+                      {!publicMode && (
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8 }}>
+                          <input value={readPasswords[ad.id] || ""} onChange={(event) => setReadPasswords({ ...readPasswords, [ad.id]: event.target.value })} placeholder="Password" style={inputStyle} />
+                          <button onClick={() => readReplies(ad)} style={buttonStyle}>Open</button>
+                        </div>
+                      )}
                       {openedReplies[ad.id] && (
                         <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
                           {openedReplies[ad.id].length ? openedReplies[ad.id].map(reply => (
