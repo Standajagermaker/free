@@ -4,7 +4,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "import:events": "node scripts/import-events.mjs"
   },
   "dependencies": {
     "leaflet": "1.9.4",
