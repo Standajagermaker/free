@@ -63,21 +63,11 @@ function teaserFor(event) {
   const city = event.city || "the city";
   const category = event.category || "event";
 
-  if (category.includes("cinema")) {
-    return `Movie vibe: ${title} sounds like a good reason to stop scrolling and ask who wants to join.`;
-  }
-  if (category.includes("concert") || category.includes("festival")) {
-    return `Good excuse to gather people: music, atmosphere and a clear plan in ${city}.`;
-  }
-  if (category.includes("theatre") || category.includes("culture")) {
-    return `Culture pick: ideal for a calm evening and an easy invitation to someone new.`;
-  }
-  if (category.includes("sport")) {
-    return `Match energy: simple plan, clear time, easy to invite a small group.`;
-  }
-  if (category.includes("food")) {
-    return `Low-pressure idea: walk, taste something, talk, and see where the day goes.`;
-  }
+  if (category.includes("cinema")) return `Movie vibe: ${title} sounds like a good reason to stop scrolling and ask who wants to join.`;
+  if (category.includes("concert") || category.includes("festival")) return `Good excuse to gather people: music, atmosphere and a clear plan in ${city}.`;
+  if (category.includes("theatre") || category.includes("culture")) return `Culture pick: ideal for a calm evening and an easy invitation to someone new.`;
+  if (category.includes("sport")) return `Match energy: simple plan, clear time, easy to invite a small group.`;
+  if (category.includes("food")) return `Low-pressure idea: walk, taste something, talk, and see where the day goes.`;
   return `Idea starter: use this as a reason to write “hey, who wants to join me?”`;
 }
 
@@ -89,7 +79,7 @@ function inviteUrl(event) {
   return `/?title=${title}&city=${city}&event_date=${date}&event_time=${time}`;
 }
 
-export default function Ideas() {
+export default function EventsPage() {
   const [events, setEvents] = useState([]);
   const [city, setCity] = useState("");
   const [category, setCategory] = useState("");
@@ -132,30 +122,22 @@ export default function Ideas() {
     <main style={{ padding: 28, fontFamily: "Arial", background: "#f5f5f0", minHeight: "100vh" }}>
       <header style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "start", marginBottom: 20 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 44 }}>ideas</h1>
-          <p style={{ color: "#555", fontSize: 18, marginTop: 6 }}>Don’t know what to do? Pick a city, find a vibe, go outside.</p>
+          <h1 style={{ margin: 0, fontSize: 44 }}>events</h1>
+          <p style={{ color: "#555", fontSize: 18, marginTop: 6 }}>Find what is happening, then invite someone to join.</p>
         </div>
-        <button onClick={loadEvents} style={{ padding: "10px 14px", borderRadius: 10, border: 0, background: "#111", color: "white", fontWeight: "bold", cursor: "pointer" }}>
-          Refresh
-        </button>
+        <button onClick={loadEvents} style={{ padding: "10px 14px", borderRadius: 10, border: 0, background: "#111", color: "white", fontWeight: "bold", cursor: "pointer" }}>Refresh</button>
       </header>
 
       <section style={{ ...card, marginBottom: 16 }}>
         <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr auto", gap: 10, alignItems: "center" }}>
           <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Fulltext search: film, concert, city, source..." style={input} />
-          <select value={city} onChange={e => setCity(e.target.value)} style={input}>
-            <option value="">All cities</option>
-            {cities.map(c => <option key={c}>{c}</option>)}
-          </select>
-          <select value={category} onChange={e => setCategory(e.target.value)} style={input}>
-            <option value="">All categories</option>
-            {categories.map(c => <option key={c}>{c}</option>)}
-          </select>
-          <span style={{ color: "#777", fontSize: 13, whiteSpace: "nowrap" }}>{filtered.length} ideas</span>
+          <select value={city} onChange={e => setCity(e.target.value)} style={input}><option value="">All cities</option>{cities.map(c => <option key={c}>{c}</option>)}</select>
+          <select value={category} onChange={e => setCategory(e.target.value)} style={input}><option value="">All categories</option>{categories.map(c => <option key={c}>{c}</option>)}</select>
+          <span style={{ color: "#777", fontSize: 13, whiteSpace: "nowrap" }}>{filtered.length} events</span>
         </div>
       </section>
 
-      {loading && <p style={{ color: "#777" }}>Loading ideas...</p>}
+      {loading && <p style={{ color: "#777" }}>Loading events...</p>}
 
       {!loading && Object.entries(groups).map(([label, list]) => (
         <section key={label} style={{ marginBottom: 22 }}>
@@ -168,15 +150,9 @@ export default function Ideas() {
                     <b style={{ fontSize: 16 }}>{e.title || "Untitled event"}</b>
                     <span style={{ color: "#666", whiteSpace: "nowrap" }}>{e.city || "Unknown"}</span>
                   </div>
-
-                  <div style={{ color: "#555", margin: "6px 0", lineHeight: 1.35 }}>
-                    {teaserFor(e)}
-                  </div>
-
+                  <div style={{ color: "#555", margin: "6px 0", lineHeight: 1.35 }}>{teaserFor(e)}</div>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                    <span style={{ color: "#888", fontSize: 12 }}>
-                      {e.event_date || "date TBA"} {e.event_time || "time TBA"} · {e.category || "event"} · {e.source || "external"}
-                    </span>
+                    <span style={{ color: "#888", fontSize: 12 }}>{e.event_date || "date TBA"} {e.event_time || "time TBA"} · {e.category || "event"} · {e.source || "external"}</span>
                     <div style={{ display: "flex", gap: 6 }}>
                       <a href={inviteUrl(e)} style={primarySmallButton}>Invite someone</a>
                       {e.url && <a href={e.url} target="_blank" rel="noreferrer" style={smallButton}>Open</a>}
@@ -185,9 +161,7 @@ export default function Ideas() {
                 </article>
               ))}
             </div>
-          ) : (
-            <p style={{ color: "#999", marginTop: 0 }}>Nothing here.</p>
-          )}
+          ) : <p style={{ color: "#999", marginTop: 0 }}>Nothing here.</p>}
         </section>
       ))}
     </main>
