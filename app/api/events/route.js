@@ -1,6 +1,7 @@
 const CITIES = ["Prague", "Berlin", "Vienna"];
+const SEARCH_TERMS = ["music", "party", "concert", "theatre", "film"];
 
-function normalizeEvent(e, fallbackCity) {
+function normalizeEvent(e, fallbackCity, fallbackCategory) {
   const start = e.start?.local || "";
   return {
     id: e.id,
@@ -8,15 +9,13 @@ function normalizeEvent(e, fallbackCity) {
     city: e.venue?.address?.city || fallbackCity,
     event_date: start.slice(0, 10),
     event_time: start.slice(11, 16),
-    category: e.category_id ? `category ${e.category_id}` : "event",
+    category: fallbackCategory || "event",
     source: "Eventbrite",
     url: e.url || "",
   };
 }
 
-async function fetchCityEvents(city, token) {
-  const url = `https://www.eventbriteapi.com/v3/events/search/?location.address=${encodeURIComponent(city)}&expand=venue&sort_by=date&start_date.keyword=this_week`;
-
+async function searchEventbrite(url, token) {
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
     next: { revalidate: 1800 },
@@ -24,7 +23,19 @@ async function fetchCityEvents(city, token) {
 
   if (!res.ok) return [];
   const data = await res.json();
-  return (data.events || []).map((e) => normalizeEvent(e, city));
+  return data.events || [];
+}
+
+async function fetchCityEvents(city, token) {
+  const all = [];
+
+  for (const term of SEARCH_TERMS) {
+    const url = `https://www.eventbriteapi.com/v3/events/search/?location.address=${encodeURIComponent(city)}&expand=venue&sort_by=date&q=${encodeURIComponent(term)}`;
+    const events = await searchEventbrite(url, token);
+    all.push(...events.map((e) => normalizeEvent(e, city, term)));
+  }
+
+  return all;
 }
 
 export async function GET() {
@@ -36,8 +47,13 @@ export async function GET() {
 
   try {
     const batches = await Promise.all(CITIES.map((city) => fetchCityEvents(city, token)));
-    const events = batches
-      .flat()
+
+    const byId = new Map();
+    batches.flat().forEach((event) => {
+      if (event.id && !byId.has(event.id)) byId.set(event.id, event);
+    });
+
+    const events = [...byId.values()]
       .filter((event) => event.title)
       .sort((a, b) => `${a.event_date || ""} ${a.event_time || ""}`.localeCompare(`${b.event_date || ""} ${b.event_time || ""}`))
       .slice(0, 80);
