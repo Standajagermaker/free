@@ -1,0 +1,1 @@
+export default function Page(){return <main style={{padding:40,fontFamily:'Arial'}}><h1>FREE</h1><p>Anonymous classifieds platform</p></main>}
