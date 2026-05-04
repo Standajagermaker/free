@@ -1,3 +1,7 @@
+"use client";
+
+import { usePathname } from "next/navigation";
+
 const navLink = {
   color: "#111",
   textDecoration: "none",
@@ -8,30 +12,22 @@ const navLink = {
   background: "white"
 };
 
+function SubHeader(){
+  const p = usePathname() || "/";
+  let text = "Free anonymous ads, free your mind, feel free to enjoy, offer, share, invite, organize ... anything with anybody.";
+  if(p.startsWith("/ideas")) text = "feel free 2 ... go to events.";
+  if(p.startsWith("/trips")) text = "feel free 2 ... go for trip.";
+  return <div style={{padding:"6px 20px 10px",color:"#555",fontSize:14,fontFamily:"Arial"}}>{text}</div>;
+}
+
 export default function RootLayout({children}){
   return (
     <html>
       <head>
-        <link
-          rel="stylesheet"
-          href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        />
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
       </head>
       <body style={{ margin: 0, background: "#f5f5f0" }}>
-        <nav style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 1000,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 12,
-          padding: "10px 20px",
-          background: "rgba(245,245,240,0.94)",
-          backdropFilter: "blur(8px)",
-          borderBottom: "1px solid #ddd",
-          fontFamily: "Arial"
-        }}>
+        <nav style={{ position:"sticky", top:0, zIndex:1000, display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, padding:"10px 20px", background:"rgba(245,245,240,0.94)", backdropFilter:"blur(8px)", borderBottom:"1px solid #ddd", fontFamily:"Arial" }}>
           <a href="/" style={{ color: "#111", textDecoration: "none", fontWeight: "900", fontSize: 20 }}>feel free 2</a>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <a href="/" style={navLink}>Ads</a>
@@ -40,6 +36,7 @@ export default function RootLayout({children}){
             <a href="/statistics" style={navLink}>Stats</a>
           </div>
         </nav>
+        <SubHeader />
         {children}
       </body>
     </html>
