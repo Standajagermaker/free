@@ -16,11 +16,23 @@ export default function Map({ ads }) {
 
     ads.forEach((ad) => {
       if (ad.lat && ad.lng) {
-        L.circle([ad.lat, ad.lng], {
-          radius: 2000,
-          color: "red",
-          fillOpacity: 0.3,
-        }).addTo(map);
+        // precise → blue pin
+        if (ad.street) {
+          const marker = L.circleMarker([ad.lat, ad.lng], {
+            radius: 6,
+            color: "blue",
+            fillColor: "blue",
+            fillOpacity: 0.9
+          });
+          marker.addTo(map);
+        } else {
+          // region → red circle
+          L.circle([ad.lat, ad.lng], {
+            radius: 2000,
+            color: "red",
+            fillOpacity: 0.3,
+          }).addTo(map);
+        }
       }
     });
 
