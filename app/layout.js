@@ -14,10 +14,14 @@ const navLink = {
 
 function SubHeader(){
   const p = usePathname() || "/";
-  let text = "Free anonymous ads, free your mind, feel free to enjoy, offer, share, invite, organize ... anything with anybody.";
-  if(p.startsWith("/ideas")) text = "feel free 2 ... go to events.";
-  if(p.startsWith("/trips")) text = "feel free 2 ... go for trip.";
-  return <div style={{padding:"6px 20px 10px",color:"#555",fontSize:14,fontFamily:"Arial"}}>{text}</div>;
+  let text = "Free anonymous ads";
+  if(p.startsWith("/ideas")) text = "Events";
+  if(p.startsWith("/trips")) text = "Trip tips";
+  return (
+    <div style={{padding:"10px 20px",borderBottom:"1px solid #eee",fontFamily:"Arial"}}>
+      <div style={{fontSize:28,fontWeight:700}}>{text}</div>
+    </div>
+  );
 }
 
 export default function RootLayout({children}){
