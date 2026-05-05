@@ -31,14 +31,36 @@ export default function RootLayout({children}){
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
       </head>
       <body style={{ margin: 0, background: "#f5f5f0" }}>
-        <nav style={{ position:"sticky", top:0, zIndex:1000, display:"flex", justifyContent:"flex-end", alignItems:"center", gap:12, padding:"10px 20px", background:"rgba(245,245,240,0.94)", backdropFilter:"blur(8px)", borderBottom:"1px solid #ddd", fontFamily:"Arial" }}>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <a href="/" style={navLink}>Ads</a>
-            <a href="/ideas" style={navLink}>Events</a>
-            <a href="/trips" style={navLink}>Trips</a>
-            <a href="/statistics" style={navLink}>Stats</a>
-          </div>
-        </nav>
+<nav
+  style={{
+    position: "sticky",
+    top: 0,
+    zIndex: 1000,
+    display: "flex",
+    justifyContent: "space-between", // 👈 důležité
+    alignItems: "center",
+    padding: "10px 20px",
+    background: "rgba(245,245,240,0.94)",
+    backdropFilter: "blur(8px)",
+    borderBottom: "1px solid #ddd",
+    fontFamily: "Arial"
+  }}
+>
+
+  {/* 👈 LEVÁ STRANA = HEADLINE */}
+  <div style={{ fontSize: 18, fontWeight: 700 }}>
+    feel free 2 ...
+  </div>
+
+  {/* 👉 PRAVÁ STRANA = NAV */}
+  <div style={{ display: "flex", gap: 8 }}>
+    <a href="/" style={navLink}>Ads</a>
+    <a href="/ideas" style={navLink}>Events</a>
+    <a href="/trips" style={navLink}>Trips</a>
+    <a href="/statistics" style={navLink}>Stats</a>
+  </div>
+
+</nav>
         <SubHeader />
         {children}
       </body>
