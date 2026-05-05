@@ -58,7 +58,7 @@ export default function Statistics() {
 
   return (
     <main style={{padding:30,fontFamily:"Arial"}}>
-      <h1>statistics</h1>
+      <h1>Track activity</h1>
 
       <button onClick={runImport} style={{marginBottom:20,padding:10,borderRadius:8,background:"black",color:"white"}}>
         Import events (50+ cities)
