@@ -62,15 +62,14 @@ export default function TripsPage(){
   return (
     <main style={{padding:20,fontFamily:"Arial"}}>
 
+      <h1>Make a trip</h1>
       <p style={{color:"#555"}}>Places worth going. No schedule. Just go.</p>
 
       <div style={{display:"grid",gridTemplateColumns:"300px 1fr",gap:16}}>
 
-        {/* LEFT */}
         <div>
           <Map ads={filtered}/>
 
-          {/* FORM JE ZPĚT */}
           <form onSubmit={create} style={{display:"grid",gap:8,background:"white",padding:12,borderRadius:12}}>
             <input name="title" placeholder="Place" required style={inputStyle}/>
             <textarea name="description" placeholder="Description" required style={inputStyle}/>
@@ -81,7 +80,6 @@ export default function TripsPage(){
           </form>
         </div>
 
-        {/* RIGHT */}
         <div>
           <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search"
                  style={{width:"100%",padding:8,marginBottom:10}}/>
@@ -96,21 +94,12 @@ export default function TripsPage(){
 
               <div style={{color:"#555"}}>{t.description}</div>
 
-              {/* TADY JE TEN FIX */}
-              <div style={{
-                display:"flex",
-                justifyContent:"space-between",
-                alignItems:"center",
-                marginTop:6
-              }}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:6}}>
 
-                {/* LEFT INFO */}
                 <span style={{fontSize:12,color:"#777"}}>
                   {t.street || ""}
-                  {t.lat && t.lng ? ` · ${t.lat.toFixed(4)}, ${t.lng.toFixed(4)}` : ""}
                 </span>
 
-                {/* RIGHT BUTTONS */}
                 <div style={{display:"flex",gap:6}}>
                   <a href={inviteUrl(t)} style={primaryButton}>Invite</a>
                   {t.url && <a href={t.url} target="_blank" style={smallButton}>Open</a>}

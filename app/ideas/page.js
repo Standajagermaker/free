@@ -121,7 +121,8 @@ export default function EventsPage() {
   return (
     <main style={{ padding: 28, fontFamily: "Arial", background: "#f5f5f0", minHeight: "100vh" }}>
       <header style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "start", marginBottom: 20 }}>
-        <div
+        <div>
+          <h1 style={{ margin: 0 }}>Go to events</h1>
           <p style={{ color: "#555", fontSize: 18, marginTop: 6 }}>Find what is happening, then invite someone to join.</p>
         </div>
         <button onClick={loadEvents} style={{ padding: "10px 14px", borderRadius: 10, border: 0, background: "#111", color: "white", fontWeight: "bold", cursor: "pointer" }}>Refresh</button>

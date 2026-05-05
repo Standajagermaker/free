@@ -12,32 +12,25 @@ const navLink = {
   background: "white"
 };
 
-function SubHeader(){
-  const p = usePathname() || "/";
-  let text = "Create anonymous ads";
-  if(p.startsWith("/ideas")) text = "Events";
-  if(p.startsWith("/trips")) text = "Trip tips";
-  return (
-    <div style={{padding:"12px 20px",borderBottom:"1px solid #eee",fontFamily:"Arial",fontSize:26,fontWeight:700}}>
-      {text}
-    </div>
-  );
-}
-
 export default function RootLayout({children}){
+  const p = usePathname() || "/";
+
+  const active = (path) => p.startsWith(path);
+
   return (
     <html>
       <head>
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
       </head>
       <body style={{ margin: 0, background: "#f5f5f0" }}>
+
 <nav
   style={{
     position: "sticky",
     top: 0,
     zIndex: 1000,
     display: "flex",
-    justifyContent: "space-between", // 👈 důležité
+    justifyContent: "space-between",
     alignItems: "center",
     padding: "10px 20px",
     background: "rgba(245,245,240,0.94)",
@@ -47,21 +40,20 @@ export default function RootLayout({children}){
   }}
 >
 
-  {/* 👈 LEVÁ STRANA = HEADLINE */}
   <div style={{ fontSize: 18, fontWeight: 700 }}>
-    feel free 2 ...
+    feel free to ...
   </div>
 
-  {/* 👉 PRAVÁ STRANA = NAV */}
   <div style={{ display: "flex", gap: 8 }}>
-    <a href="/" style={navLink}>Ads</a>
-    <a href="/ideas" style={navLink}>Events</a>
-    <a href="/trips" style={navLink}>Trips</a>
-    <a href="/statistics" style={navLink}>Stats</a>
+    <a href="/" style={{...navLink, ...(active("/") && {border:"2px solid #111"})}}>Ads</a>
+    <a href="/ideas" style={{...navLink, ...(active("/ideas") && {border:"2px solid #111"})}}>Events</a>
+    <a href="/trips" style={{...navLink, ...(active("/trips") && {border:"2px solid #111"})}}>Trips</a>
+    <a href="/scams" style={{...navLink, ...(active("/scams") && {border:"2px solid #111"})}}>Scams</a>
+    <a href="/statistics" style={{...navLink, ...(active("/statistics") && {border:"2px solid #111"})}}>Stats</a>
   </div>
 
 </nav>
-        <SubHeader />
+
         {children}
       </body>
     </html>
