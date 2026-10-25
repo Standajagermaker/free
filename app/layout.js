@@ -17,6 +17,7 @@ function SubHeader(){
   let text = "Create anonymous ads";
   if(p.startsWith("/ideas")) text = "Events";
   if(p.startsWith("/trips")) text = "Trip tips";
+  if(p.startsWith("/pay")) text = "Feel Free to Pay · Preview";
   return (
     <div style={{padding:"12px 20px",borderBottom:"1px solid #eee",fontFamily:"Arial",fontSize:26,fontWeight:700}}>
       {text}
@@ -37,9 +38,11 @@ export default function RootLayout({children}){
     top: 0,
     zIndex: 1000,
     display: "flex",
-    justifyContent: "space-between", // 👈 důležité
+    justifyContent: "space-between",
     alignItems: "center",
     padding: "10px 20px",
+    gap: 12,
+    flexWrap: "wrap",
     background: "rgba(245,245,240,0.94)",
     backdropFilter: "blur(8px)",
     borderBottom: "1px solid #ddd",
@@ -47,17 +50,18 @@ export default function RootLayout({children}){
   }}
 >
 
-  {/* 👈 LEVÁ STRANA = HEADLINE */}
+
   <div style={{ fontSize: 18, fontWeight: 700 }}>
     feel free 2 ...
   </div>
 
-  {/* 👉 PRAVÁ STRANA = NAV */}
-  <div style={{ display: "flex", gap: 8 }}>
+
+  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
     <a href="/" style={navLink}>Ads</a>
     <a href="/ideas" style={navLink}>Events</a>
     <a href="/trips" style={navLink}>Trips</a>
     <a href="/statistics" style={navLink}>Stats</a>
+    <a href="/pay" style={{...navLink,background:"#342a54",color:"#fff",borderColor:"#342a54"}}>Feel Free to Pay ✨</a>
   </div>
 
 </nav>
