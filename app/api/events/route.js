@@ -1,125 +1,41 @@
-const CURATED_EVENTS = [
-  { id: "goout-prague-jazz", title: "Jazz evening in Prague", city: "Prague", event_date: "today", event_time: "20:00", category: "concert", source: "GoOut style", url: "https://goout.net/" },
-  { id: "goout-prague-theatre", title: "Small theatre night", city: "Prague", event_date: "tomorrow", event_time: "19:30", category: "theatre", source: "Prague culture", url: "https://goout.net/" },
-  { id: "kino-prague", title: "Indie film screening", city: "Prague", event_date: "this week", event_time: "18:00", category: "cinema", source: "Cinema tips", url: "https://www.kinoatlaspraha.cz/" },
-  { id: "meetup-prague", title: "Open meetup for makers", city: "Prague", event_date: "this week", event_time: "18:30", category: "meetup", source: "Community", url: "https://www.meetup.com/" },
-  { id: "berlin-music", title: "Live music in Kreuzberg", city: "Berlin", event_date: "today", event_time: "21:00", category: "concert", source: "Berlin music", url: "https://www.visitberlin.de/" },
-  { id: "berlin-gallery", title: "Gallery opening", city: "Berlin", event_date: "tomorrow", event_time: "18:00", category: "art", source: "Berlin culture", url: "https://www.visitberlin.de/" },
-  { id: "berlin-club", title: "Electronic night", city: "Berlin", event_date: "weekend", event_time: "23:00", category: "party", source: "Berlin nightlife", url: "https://www.visitberlin.de/" },
-  { id: "vienna-classical", title: "Classical concert", city: "Vienna", event_date: "today", event_time: "19:00", category: "concert", source: "Vienna culture", url: "https://www.wien.info/" },
-  { id: "vienna-museum", title: "Museum evening", city: "Vienna", event_date: "tomorrow", event_time: "17:00", category: "culture", source: "Vienna museums", url: "https://www.wien.info/" },
-  { id: "vienna-food", title: "Food market walk", city: "Vienna", event_date: "weekend", event_time: "11:00", category: "food", source: "City guide", url: "https://www.wien.info/" },
-  { id: "london-comedy", title: "Stand-up comedy night", city: "London", event_date: "this week", event_time: "20:00", category: "comedy", source: "London picks", url: "https://www.timeout.com/london" },
-  { id: "paris-film", title: "French cinema night", city: "Paris", event_date: "this week", event_time: "19:00", category: "cinema", source: "Paris picks", url: "https://www.timeout.com/paris" }
+// Feel Free 2: verified event catalogue. No invented dates or placeholder events.
+const VERIFIED = [
+  {id:"de-pubquiz-20261113",title:"7. PubQuiz der KjG Deggendorf",city:"Deggendorf",category:"meetup",event_date:"2026-11-13",event_time:"20:00",source:"Stadt Deggendorf",url:"https://www.deggendorf.de/veranstaltungen/event/pubquiz-november-2026"},
+  {id:"de-windlicht-20261115",title:"Lichterfarbenschimmer – gefilztes Windlicht",city:"Deggendorf",category:"workshop",event_date:"2026-11-15",event_time:"10:00",source:"Stadt Deggendorf",url:"https://www.deggendorf.de/veranstaltungen/event/lichterfarbenschimmer-gefilztes-windlicht-november-2026"},
+  {id:"de-walk-20261115",title:"Deggendorfer Sonntagsspaziergang",city:"Deggendorf",category:"outdoor",event_date:"2026-11-15",event_time:"14:00",source:"Stadt Deggendorf",url:"https://www.deggendorf.de/veranstaltungen/event/deggendorfer-sonntagsspaziergang-november-2026"},
+  {id:"de-tower-20261128",title:"Rathausturmführung im Advent",city:"Deggendorf",category:"culture",event_date:"2026-11-28",event_time:"17:00",source:"Stadt Deggendorf",url:"https://www.deggendorf.de/veranstaltungen/event/rathausturmfuehrung-im-advent"},
+  {id:"de-quantum-20261102",title:"Quantum Academy Herbstschule (2.–4.11.)",city:"Deggendorf",category:"workshop",event_date:"2026-11-02",event_time:"08:00",source:"Stadt Deggendorf",url:"https://www.deggendorf.de/veranstaltungen/event/zocken-erlaubt-lernen-garantiert-quantum-academy-herbstschule-november-2026-thd-quantum-academy"},
+  {id:"mun-joe-20261101",title:"Joe Jackson & Band – Circus Krone",city:"Munich",category:"concert",event_date:"2026-11-01",event_time:"19:30",source:"muenchen.de",url:"https://www.muenchen.de/veranstaltungen/november"},
+  {id:"mun-lang-20261101",title:"Lang Lang – Isarphilharmonie",city:"Munich",category:"concert",event_date:"2026-11-01",event_time:"20:00",source:"muenchen.de",url:"https://www.muenchen.de/veranstaltungen/november"},
+  {id:"mun-slam-20261102",title:"113. Schwabinger Poetry Slam",city:"Munich",category:"culture",event_date:"2026-11-02",event_time:"20:00",source:"muenchen.de",url:"https://www.muenchen.de/veranstaltungen/november"},
+  {id:"mun-nfl-20261115",title:"NFL Munich Game: Patriots vs. Lions",city:"Munich",category:"sport",event_date:"2026-11-15",event_time:"",source:"muenchen.de",url:"https://www.muenchen.de/veranstaltungen/november"},
+  {id:"mun-tokio-20261116",title:"Tokio Hotel – Olympiahalle",city:"Munich",category:"concert",event_date:"2026-11-16",event_time:"",source:"muenchen.de",url:"https://www.muenchen.de/veranstaltungen/november"},
+  {id:"mun-xmas-20261120",title:"Münchner Christkindlmarkt – Eröffnung",city:"Munich",category:"festival",event_date:"2026-11-20",event_time:"",source:"muenchen.de",url:"https://www.muenchen.de/veranstaltungen/top-events-2026-muenchen"},
+  {id:"mun-tollwood-20261124",title:"Winter-Tollwood – Festivalstart",city:"Munich",category:"festival",event_date:"2026-11-24",event_time:"",source:"muenchen.de",url:"https://www.muenchen.de/veranstaltungen/november"}
 ];
-
-function normalizeEventbriteEvent(e) {
-  const start = e.start?.local || e.start?.utc || "";
-  return {
-    id: e.id,
-    title: e.name?.text || e.name?.html || "Untitled event",
-    city: e.online_event ? "Online" : (e.venue?.address?.city || "Unknown"),
-    event_date: start.slice(0, 10),
-    event_time: start.slice(11, 16),
-    category: "event",
-    source: "Eventbrite",
-    url: e.url || "",
-  };
+const isoDate = s => /^\d{4}-\d{2}-\d{2}$/.test(s || "");
+async function supabaseEvents() {
+  const base=process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key=process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if(!base||!key)return [];
+  const res=await fetch(base+"/rest/v1/events?select=*&order=event_date.asc&limit=500",{headers:{apikey:key,Authorization:"Bearer "+key},cache:"no-store"});
+  if(!res.ok)return [];
+  const data=await res.json();
+  return Array.isArray(data)?data:[];
 }
-
-function normalizeSupabaseEvent(e) {
-  return {
-    id: e.id,
-    title: e.title || "Untitled event",
-    city: e.city || "Unknown",
-    event_date: e.event_date || "",
-    event_time: e.event_time || "",
-    category: e.category || "event",
-    source: e.source || "Supabase",
-    url: e.url || "",
-  };
-}
-
-async function ebGet(path, token) {
-  const res = await fetch(`https://www.eventbriteapi.com/v3${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
-  });
-  const text = await res.text();
-  let data = {};
-  try { data = JSON.parse(text); } catch { data = { raw: text }; }
-  return { ok: res.ok, status: res.status, path, data };
-}
-
-async function fetchEventbriteOwnedEvents(token) {
-  const orgsResult = await ebGet("/users/me/organizations/", token);
-  const organizations = orgsResult.data?.organizations || [];
-  const eventResults = [];
-  for (const org of organizations) {
-    const orgId = org.id;
-    const eventsResult = await ebGet(`/organizations/${orgId}/events/?status=live&expand=venue`, token);
-    eventResults.push({ organization: org.name || orgId, organization_id: orgId, ...eventsResult });
-  }
-  const events = eventResults.flatMap((result) => result.data?.events || []).map(normalizeEventbriteEvent);
-  return { orgsResult, organizations, eventResults, events };
-}
-
-async function fetchSupabaseEvents() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !anonKey) return { ok: false, status: 0, events: [], error: "Missing Supabase env" };
-  const res = await fetch(`${supabaseUrl}/rest/v1/events?select=*&order=event_date.asc`, {
-    headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}` },
-    cache: "no-store",
-  });
-  const data = await res.json().catch(() => []);
-  return { ok: res.ok, status: res.status, events: Array.isArray(data) ? data.map(normalizeSupabaseEvent) : [], error: Array.isArray(data) ? null : data };
-}
-
-function sortEvents(events) {
-  return events.filter((event) => event.title).sort((a, b) => `${a.event_date || ""} ${a.event_time || ""}`.localeCompare(`${b.event_date || ""} ${b.event_time || ""}`)).slice(0, 120);
-}
-
 export async function GET(request) {
-  const token = process.env.EVENTBRITE_TOKEN;
-  const url = new URL(request.url);
-  const debug = url.searchParams.get("debug") === "1";
-  let eventbrite = null;
-  let supabase = null;
-  let sourceUsed = "curated";
-  let events = [];
-
-  try {
-    if (token) {
-      eventbrite = await fetchEventbriteOwnedEvents(token);
-      events = sortEvents(eventbrite.events);
-      if (events.length) sourceUsed = "eventbrite";
-    }
-    if (!events.length) {
-      supabase = await fetchSupabaseEvents();
-      events = sortEvents(supabase.events);
-      if (events.length) sourceUsed = "supabase";
-    }
-    if (!events.length) {
-      events = sortEvents(CURATED_EVENTS);
-      sourceUsed = "curated";
-    }
-    if (debug) {
-      return Response.json({
-        token_present: Boolean(token),
-        source_used: sourceUsed,
-        eventbrite_orgs_status: eventbrite?.orgsResult?.status || null,
-        eventbrite_orgs_count: eventbrite?.organizations?.length || 0,
-        eventbrite_event_results: (eventbrite?.eventResults || []).map((result) => ({ organization: result.organization, organization_id: result.organization_id, status: result.status, ok: result.ok, count: result.data?.events?.length || 0, error: result.data?.error || result.data?.error_description || null })),
-        supabase_status: supabase?.status || null,
-        supabase_count: supabase?.events?.length || 0,
-        curated_count: CURATED_EVENTS.length,
-        final_count: events.length,
-        sample: events[0] || null,
-      });
-    }
-    return Response.json(events);
-  } catch (err) {
-    return Response.json({ error: "API failed", detail: String(err?.message || err) }, { status: 500 });
+  const today=new Date().toISOString().slice(0,10);
+  let stored=[];
+  try { stored=await supabaseEvents(); } catch {}
+  // Only externally sourced, date-valid records; exclude historical seed and synthetic import sources.
+  const realStored=stored.filter(e=>isoDate(e.event_date)&&e.event_date>=today&&e.url&&e.source&&!/seed|search|import|style|curated|supabase/i.test(e.source));
+  const byKey=new Map();
+  for(const e of [...VERIFIED,...realStored]){
+    if(!isoDate(e.event_date)||e.event_date<today)continue;
+    const key=[e.title,e.city,e.event_date].map(x=>String(x||"").trim().toLowerCase()).join("|");
+    if(!byKey.has(key))byKey.set(key,e);
   }
+  const events=[...byKey.values()].sort((a,b)=>(a.event_date+" "+(a.event_time||"")).localeCompare(b.event_date+" "+(b.event_time||"")));
+  if(new URL(request.url).searchParams.get("debug")==="1")return Response.json({source_used:"verified+filtered-supabase",verified_count:VERIFIED.length,stored_eligible:realStored.length,final_count:events.length,sample:events[0]||null});
+  return Response.json(events);
 }
