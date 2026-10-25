@@ -31,6 +31,6 @@ export async function POST(request){
   if(imagePath)row.image_url=imagePath;
   const res=await fetch(base+"/rest/v1/pay_requests",{method:"POST",cache:"no-store",headers:{...headers,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify(row)});
   if(!res.ok){console.error("pay_requests insert",res.status);return reply({error:"Could not save your request."},503)}
-  return reply({ok:true,message:"Your request was saved privately for review."},201);
+  return reply({ok:true,message:"Your project has been submitted and is now visible in the community ranking."},201);
  }catch{return reply({error:"Service temporarily unavailable."},503)}
 }
