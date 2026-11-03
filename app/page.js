@@ -30,7 +30,7 @@ function eventLabel(ad) {
   if (time) return time;
   return String(ad.created_at || "").slice(0, 10);
 }
-function isPublicAd(ad) { return ad.response_mode === "public" || ad.is_public_contact === true; }
+function isPublicAd(ad) { return ad.response_mode === "public"; }
 
 async function geocodeCity(city) {
   const key = normalizeCity(city);
@@ -63,21 +63,20 @@ export default function Page() {
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const authHeaders = { apikey: anonKey, Authorization: `Bearer ${anonKey}` };
 
-  async function loadAds() {
-    const res = await fetch(`${supabaseUrl}/rest/v1/ads?select=*&order=created_at.desc`, { headers: authHeaders });
+  async function api(path, payload) {
+    const res = await fetch(path, payload === undefined ? { cache: "no-store" } : {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), cache: "no-store"
+    });
     const data = await res.json();
-    setAds(Array.isArray(data) ? data : []);
+    if (!res.ok) throw new Error(data.error || "Request failed.");
+    return data;
   }
 
-  async function loadCounts() {
-    try {
-      const res = await fetch(`${supabaseUrl}/rest/v1/responses?select=ad_id`, { headers: authHeaders });
-      const data = await res.json();
-      const map = {};
-      (Array.isArray(data) ? data : []).forEach((row) => { map[row.ad_id] = (map[row.ad_id] || 0) + 1; });
-      setCounts(map);
-    } catch { setCounts({}); }
+  async function loadAds() {
+    const data = await api("/api/ads");
+    setAds(data.ads); setCounts(data.counts);
   }
+  async function loadCounts() { await loadAds(); }
 
   async function trackVisit() {
     try {
@@ -93,7 +92,7 @@ export default function Page() {
     }
   }
 
-  async function refreshAll() { await loadAds(); await loadCounts(); }
+  async function refreshAll() { try { await loadAds(); } catch (error) { setStatus(`Error: ${error.message}`); } }
 
   useEffect(() => {
     refreshAll();
@@ -147,10 +146,9 @@ export default function Page() {
         password: mode === "secret" ? password : "",
         image_url: imageUrl
       };
-      if (mode === "secret" && (!payload.password || payload.password.length < 3)) throw new Error("Secret replies need a password with at least 3 characters.");
+      if (mode === "secret" && (!payload.password || payload.password.length < 12)) throw new Error("Secret replies need a password with at least 12 characters.");
       if (mode === "public" && !payload.public_contact) throw new Error("Public mode needs a public contact or meeting note.");
-      const res = await fetch(`${supabaseUrl}/rest/v1/ads`, { method: "POST", headers: { ...authHeaders, "Content-Type": "application/json", Prefer: "return=minimal" }, body: JSON.stringify(payload) });
-      if (!res.ok) throw new Error(await res.text());
+      await api("/api/ads", payload);
       formEl.reset(); setPrefill({ title: "", city: "", event_date: "", event_time: "" }); setResponseMode("secret"); setStatus("Ad created."); await refreshAll();
     } catch (error) { setStatus(`Error: ${error.message}`); }
     finally { setLoading(false); }
@@ -163,23 +161,18 @@ export default function Page() {
     setStatus("");
     try {
       const payload = { ad_id: ad.id, message: form.get("message") || "", contact: form.get("contact") || "" };
-      const res = await fetch(`${supabaseUrl}/rest/v1/responses`, { method: "POST", headers: { ...authHeaders, "Content-Type": "application/json", Prefer: "return=minimal" }, body: JSON.stringify(payload) });
-      if (!res.ok) throw new Error(await res.text());
+      await api(`/api/ads/${encodeURIComponent(ad.id)}/replies`, payload);
       formEl.reset(); setOpenReply(null); setStatus("Reply sent."); await loadCounts();
     } catch (error) { setStatus(`Error: ${error.message}`); }
   }
 
   async function readReplies(ad) {
     setStatus("");
-    if (!isPublicAd(ad)) {
-      const password = readPasswords[ad.id] || "";
-      if (password !== ad.password) { setStatus("Wrong password for this ad."); return; }
-    }
+    setOpenedReplies(previous => { const next = { ...previous }; delete next[ad.id]; return next; });
     try {
-      const res = await fetch(`${supabaseUrl}/rest/v1/responses?ad_id=eq.${ad.id}&select=*&order=created_at.desc`, { headers: authHeaders });
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
-      setOpenedReplies({ ...openedReplies, [ad.id]: data });
+      const data = await api(`/api/ads/${encodeURIComponent(ad.id)}/replies/read`, { password: readPasswords[ad.id] || "" });
+      setReadPasswords(previous => ({ ...previous, [ad.id]: "" }));
+      setOpenedReplies(previous => ({ ...previous, [ad.id]: data.replies }));
     } catch (error) { setStatus(`Error: ${error.message}`); }
   }
 
@@ -226,7 +219,7 @@ export default function Page() {
 
               {responseMode === "secret" && (
                 <>
-                  <input ref={passwordRef} name="password" type="password" placeholder="Password to read replies - do not forget this" autoComplete="new-password" required style={{ ...inputStyle, border: prefill.title ? "2px solid #111" : "1px solid #ddd" }} />
+                  <input ref={passwordRef} name="password" type="password" minLength={12} placeholder="Password to read replies - do not forget this" autoComplete="new-password" required style={{ ...inputStyle, border: prefill.title ? "2px solid #111" : "1px solid #ddd" }} />
                   <p style={{ margin: 0, color: "#777", fontSize: 12 }}>Tip: your browser/password manager may offer to save it, but this is not a normal login. Keep it somewhere safe.</p>
                 </>
               )}
@@ -265,8 +258,8 @@ export default function Page() {
 
                   {openReply === ad.id && (
                     <form onSubmit={(event) => sendReply(event, ad)} style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, marginTop: 10 }}>
-                      <input name="message" placeholder="Message" required style={inputStyle} />
-                      <input name="contact" placeholder="Contact" required style={inputStyle} />
+                      <input name="message" placeholder={publicMode ? "Public message (visible to everyone)" : "Private message"} required style={inputStyle} />
+                      <input name="contact" placeholder={publicMode ? "Public contact (visible to everyone)" : "Private contact"} required style={inputStyle} />
                       <button style={buttonStyle}>Send</button>
                     </form>
                   )}
@@ -275,7 +268,7 @@ export default function Page() {
                     <div style={{ marginTop: 10 }}>
                       {!publicMode && (
                         <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8 }}>
-                          <input value={readPasswords[ad.id] || ""} onChange={(event) => setReadPasswords({ ...readPasswords, [ad.id]: event.target.value })} placeholder="Password" style={inputStyle} />
+                          <input type="password" autoComplete="current-password" value={readPasswords[ad.id] || ""} onChange={(event) => setReadPasswords({ ...readPasswords, [ad.id]: event.target.value })} placeholder="Password" style={inputStyle} />
                           <button onClick={() => readReplies(ad)} style={buttonStyle}>Open</button>
                         </div>
                       )}
