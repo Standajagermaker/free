@@ -17,23 +17,16 @@ export default function Statistics() {
   };
 
   async function loadAll() {
-    const adsRes = await fetch(`${supabaseUrl}/rest/v1/ads?select=*`, { headers });
-    const adsData = await adsRes.json();
-
-    const respRes = await fetch(`${supabaseUrl}/rest/v1/responses?select=ad_id`, { headers });
-    const respData = await respRes.json();
+    const adsRes = await fetch("/api/ads", { cache: "no-store" });
+    if (!adsRes.ok) return;
+    const data = await adsRes.json();
 
     const visitRes = await fetch(`${supabaseUrl}/rest/v1/site_visits?select=id`, { headers: { ...headers, Prefer: "count=exact" } });
     const range = visitRes.headers.get("content-range") || "";
     const visitCount = range.includes("/") ? Number(range.split("/").pop()) : 0;
 
-    const map = {};
-    (respData || []).forEach(r => {
-      map[r.ad_id] = (map[r.ad_id] || 0) + 1;
-    });
-
-    setAds(adsData || []);
-    setCounts(map);
+    setAds(data.ads);
+    setCounts(data.counts);
     setVisits(visitCount);
   }
 
